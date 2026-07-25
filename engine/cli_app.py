@@ -1,0 +1,506 @@
+#!/usr/bin/env python3.12
+"""One-shot daily ETF-68 pipeline for the desktop app.
+
+Writes artifacts under engine/reports/ and a UI bundle at ../data/out/latest.json.
+Prints a summary JSON object to stdout.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+ENGINE_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = ENGINE_ROOT.parent
+OUT_DIR = Path(os.environ.get("ETF68_OUT_DIR") or (REPO_ROOT / "data" / "out"))
+REPORTS = Path(os.environ.get("ETF68_REPORTS_DIR") or (ENGINE_ROOT / "reports"))
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+PY = sys.executable
+
+
+def _clear_proxy_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["NO_PROXY"] = "*"
+    env["no_proxy"] = "*"
+    for k in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ):
+        env.pop(k, None)
+    env["PYTHONPATH"] = str(ENGINE_ROOT)
+    return env
+
+
+def _run(args: list[str], *, step: str) -> None:
+    print(json.dumps({"event": "step_start", "step": step}, ensure_ascii=False), flush=True)
+    proc = subprocess.run(
+        args,
+        cwd=str(ENGINE_ROOT),
+        env=_clear_proxy_env(),
+        capture_output=True,
+        text=True,
+    )
+    if proc.stdout.strip():
+        for line in proc.stdout.strip().splitlines()[-20:]:
+            print(json.dumps({"event": "log", "step": step, "line": line}, ensure_ascii=False), flush=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "unknown_error").strip()
+        raise RuntimeError(f"{step}_failed:{err[-2000:]}")
+    print(json.dumps({"event": "step_done", "step": step}, ensure_ascii=False), flush=True)
+
+
+def _find_seed(day: str) -> Path:
+    preferred = REPORTS / f"representative-technical-review-{day}.json"
+    if preferred.exists():
+        return preferred
+    dated = sorted(REPORTS.glob("representative-technical-review-*.json"))
+    if dated:
+        return dated[-1]
+    raise FileNotFoundError(
+        "no_seed_review: put a representative-technical-review-YYYY-MM-DD.json under engine/reports/"
+    )
+
+
+def _prev_day(day: str) -> str:
+    d = date.fromisoformat(day)
+    return (d - timedelta(days=1)).isoformat()
+
+
+def assemble_ui_bundle(day: str) -> dict[str, Any]:
+    review_path = REPORTS / f"representative-technical-review-{day}.json"
+    edge_path = REPORTS / f"etf68-edge-conditions-{day}.json"
+    weekly_path = REPORTS / f"etf68-weekly-macd-ma-backtest-{day}.json"
+    kdj_path = REPORTS / f"etf68-daily-kdj-macd-backtest-{day}.json"
+    impact_path = REPORTS / f"etf68-impact-events-{day}.json"
+    matrix_path = REPORTS / f"etf68-event-etf-matrix-{day}.json"
+
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    edge_by = {}
+    if edge_path.exists():
+        edge = json.loads(edge_path.read_text(encoding="utf-8"))
+        edge_by = {str(r["code"]): r for r in edge.get("rows", [])}
+    weekly_by = {}
+    if weekly_path.exists():
+        weekly = json.loads(weekly_path.read_text(encoding="utf-8"))
+        weekly_by = {str(r["code"]): r for r in weekly.get("rows", [])}
+    kdj_by = {}
+    if kdj_path.exists():
+        kdj = json.loads(kdj_path.read_text(encoding="utf-8"))
+        kdj_by = {str(r["code"]): r for r in kdj.get("rows", [])}
+
+    sector_cn = {
+        "advanced_equipment": "高端装备",
+        "agriculture": "农业",
+        "agriculture_commodity": "农产品",
+        "artificial_intelligence": "人工智能",
+        "bank": "银行",
+        "battery": "电池",
+        "biotechnology": "生物科技",
+        "broad_market": "宽基",
+        "broad_tech": "科技宽基",
+        "building_materials": "建材",
+        "cashflow_factor": "现金流因子",
+        "coal": "煤炭",
+        "commodity_equity": "商品股",
+        "communication": "通信",
+        "consumer": "消费",
+        "consumer_electronics": "消费电子",
+        "convertible_bond": "可转债",
+        "credit_bond": "信用债",
+        "defense": "军工",
+        "dividend_factor": "红利",
+        "education": "教育",
+        "electric_utility": "电力公用",
+        "electronics": "电子",
+        "energy": "能源",
+        "energy_chemical": "能源化工",
+        "food_beverage": "食品饮料",
+        "gaming": "游戏",
+        "gold": "黄金",
+        "government_bond": "国债",
+        "growth_board": "创业板",
+        "healthcare": "医药",
+        "infrastructure": "基建",
+        "innovative_drug": "创新药",
+        "intelligent_manufacturing": "智能制造",
+        "internet": "互联网",
+        "large_cap": "大盘",
+        "liquor": "白酒",
+        "livestock": "畜牧",
+        "machinery": "机械",
+        "media": "传媒",
+        "mid_cap": "中盘",
+        "mid_cap_factor": "中盘因子",
+        "new_energy": "新能源",
+        "new_energy_vehicle": "新能源汽车",
+        "new_materials": "新材料",
+        "nonferrous_metals": "有色金属",
+        "oil_gas": "油气",
+        "rare_earth": "稀土",
+        "real_estate": "地产",
+        "robotics": "机器人",
+        "satellite": "卫星",
+        "securities": "证券",
+        "securities_insurance": "证券保险",
+        "semiconductor": "半导体",
+        "small_cap": "小盘",
+        "smart_driving": "智能驾驶",
+        "software": "软件",
+        "solar": "光伏",
+        "star_50": "科创50",
+        "state_owned_enterprise": "国企",
+        "steel": "钢铁",
+        "technology": "科技",
+    }
+
+    def _state(obj: Any) -> str:
+        if isinstance(obj, dict):
+            return str(obj.get("state") or "—")
+        return str(obj or "—")
+
+    def _weekly_ma_label(obj: Any) -> str:
+        if not isinstance(obj, dict):
+            return str(obj or "—")
+        fast = obj.get("fast")
+        slow = obj.get("slow")
+        mark = "✓" if obj.get("aligned") else "✗"
+        if fast is None or slow is None:
+            return mark
+        return f"W{fast}/{slow}{mark}"
+
+    def _flow_yi(flows: Any, key: str) -> float | None:
+        if not isinstance(flows, dict):
+            return None
+        node = flows.get(key) or flows.get(int(key))  # type: ignore[arg-type]
+        if not isinstance(node, dict):
+            return None
+        v = node.get("value_cny")
+        if v is None:
+            return None
+        return round(float(v) / 1e8, 4)
+
+    def _params(r: dict[str, Any], wk: dict[str, Any]) -> str:
+        bp = wk.get("bestParams") or r.get("bestWeeklyParams") or {}
+        if isinstance(bp, dict) and bp:
+            return f"W{bp.get('fast')}/{bp.get('slow')}·{bp.get('macdMode') or bp.get('mode') or ''}"
+        return str(r.get("weeklyParams") or wk.get("weeklyParams") or "—")
+
+    rows_out: list[dict[str, Any]] = []
+    for i, r in enumerate(review.get("rows", [])):
+        code = str(r["code"])
+        eg = edge_by.get(code) or {}
+        wk = weekly_by.get(code) or {}
+        kd = kdj_by.get(code) or {}
+        sent = r.get("sentiment") if isinstance(r.get("sentiment"), dict) else {}
+        vp = r.get("volumePrice") if isinstance(r.get("volumePrice"), dict) else {}
+        sector_key = str(r.get("sector") or "")
+        rows_out.append(
+            {
+                "action": r.get("action"),
+                "code": code,
+                "name": r.get("name"),
+                "trend": r.get("trend") or r.get("weeklyTrend"),
+                "ret30Hold": r.get("ret30_hold_pct"),
+                "ret1": r.get("ret1_pct"),
+                "ret5": r.get("ret5_pct"),
+                "ret10": r.get("ret10_pct"),
+                "ret20": r.get("ret20_pct"),
+                "dd10": eg.get("dd10") or 0,
+                "dd20": eg.get("dd20") or 0,
+                "dd30": eg.get("dd30") or 0,
+                "dd60": eg.get("dd60") or 0,
+                "dd120": eg.get("dd120") or 0,
+                "bestEdge": eg.get("best_edge") or eg.get("bestEdge") or "—",
+                "rsi": r.get("rsi14"),
+                "kdj": _state(r.get("kdj")),
+                "macd": _state(r.get("macd")),
+                "weeklyMacd": _state(wk.get("weeklyMacd") or r.get("weeklyMacd")),
+                "weeklyMa": _weekly_ma_label(wk.get("weeklyMa") or r.get("weeklyMa")),
+                "backtestPass": bool(
+                    wk["backtestPass"] if "backtestPass" in wk else r.get("backtestPass")
+                ),
+                "weeklyParams": _params(r, wk),
+                "volumePrice": vp.get("label") or "中性",
+                "sentiment": round(float(sent.get("score") or 0), 1),
+                "sentimentLabel": sent.get("label") or "—",
+                "flow5": _flow_yi(r.get("flows"), "5"),
+                "flow10": _flow_yi(r.get("flows"), "10"),
+                "sector": sector_cn.get(sector_key, sector_key),
+                "reportIndex": i,
+                "kdjMacdRef": kd.get("kdjMacdRef") or "—",
+            }
+        )
+
+    by_action: dict[str, int] = {}
+    by_trend: dict[str, int] = {}
+    for row in rows_out:
+        a = str(row.get("action") or "")
+        t = str(row.get("trend") or "")
+        by_action[a] = by_action.get(a, 0) + 1
+        by_trend[t] = by_trend.get(t, 0) + 1
+
+    # Prefer ret30Hold from optional canvas-data seed when review lacks it.
+    canvas_path = REPORTS / f"etf68-canvas-data-{day}.json"
+    if canvas_path.exists():
+        canvas = json.loads(canvas_path.read_text(encoding="utf-8"))
+        ret_by = {str(r["code"]): r.get("ret30Hold") for r in canvas.get("rows", [])}
+        for row in rows_out:
+            if row.get("ret30Hold") is None and row["code"] in ret_by:
+                row["ret30Hold"] = ret_by[row["code"]]
+
+    static_dir = Path(os.environ.get("ETF68_STATIC_DIR") or (REPO_ROOT / "data" / "static"))
+    delivery = _read_json(static_dir / "equity-index-futures-delivery-calendar-2026.json")
+    citic = _read_json(static_dir / "citic-monthly-daily-2026.json")
+    delivery_citic = _read_json(static_dir / "delivery-days-citic-and-index-2026.json")
+
+    bundle = {
+        "dataDate": review.get("data_date") or day,
+        "generatedAt": datetime.now(SHANGHAI).isoformat(),
+        "breadthPct": review.get("breadth_pct"),
+        "ret30Entry": review.get("ret30_entry"),
+        "ret30AsOf": review.get("ret30_as_of") or review.get("data_date"),
+        "counts": {"byAction": by_action, "byTrend": by_trend},
+        "rows": rows_out,
+        "impactEvents": _read_json(impact_path),
+        "eventMatrix": _read_json(matrix_path),
+        "deliveryCalendar": delivery,
+        "citicMonthly": citic,
+        "deliveryCiticIndex": delivery_citic,
+    }
+    return bundle
+
+
+def _read_json(path: Path) -> Any | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def cmd_check_python(_: argparse.Namespace) -> int:
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "python": sys.version.split()[0],
+                "executable": sys.executable,
+                "engineRoot": str(ENGINE_ROOT),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def cmd_load_latest(_: argparse.Namespace) -> int:
+    latest = OUT_DIR / "latest.json"
+    if not latest.exists():
+        print(json.dumps({"ok": False, "error": "no_latest_bundle"}, ensure_ascii=False))
+        return 1
+    data = json.loads(latest.read_text(encoding="utf-8"))
+    print(json.dumps({"ok": True, "bundle": data}, ensure_ascii=False))
+    return 0
+
+
+def cmd_assemble(args: argparse.Namespace) -> int:
+    """Assemble UI bundle from existing engine/reports without network."""
+    day = args.date
+    if not day:
+        dated = sorted(REPORTS.glob("representative-technical-review-*.json"))
+        if not dated:
+            print(json.dumps({"ok": False, "error": "no_review_json"}, ensure_ascii=False))
+            return 1
+        day = dated[-1].stem.split("-", 3)[-1] if False else dated[-1].name.replace(
+            "representative-technical-review-", ""
+        ).replace(".json", "")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        bundle = assemble_ui_bundle(day)
+        latest = OUT_DIR / "latest.json"
+        dated = OUT_DIR / f"bundle-{day}.json"
+        text = json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
+        latest.write_text(text, encoding="utf-8")
+        dated.write_text(text, encoding="utf-8")
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "dataDate": bundle["dataDate"],
+                    "rowCount": len(bundle["rows"]),
+                    "latestPath": str(latest),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_generate(args: argparse.Namespace) -> int:
+    day = args.date or datetime.now(SHANGHAI).date().isoformat()
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    seed = Path(args.seed) if args.seed else _find_seed(_prev_day(day))
+    if not seed.exists():
+        seed = _find_seed(day)
+
+    review_json = REPORTS / f"representative-technical-review-{day}.json"
+    review_md = REPORTS / f"representative-technical-review-{day}.md"
+    review_csv = REPORTS / f"representative-technical-review-{day}.csv"
+    edge_json = REPORTS / f"etf68-edge-conditions-{day}.json"
+    weekly_json = REPORTS / f"etf68-weekly-macd-ma-backtest-{day}.json"
+    kdj_json = REPORTS / f"etf68-daily-kdj-macd-backtest-{day}.json"
+    impact_json = REPORTS / f"etf68-impact-events-{day}.json"
+    matrix_json = REPORTS / f"etf68-event-etf-matrix-{day}.json"
+
+    try:
+        _run(
+            [
+                PY,
+                "generate_review.py",
+                "--seed",
+                str(seed),
+                "--output-json",
+                str(review_json),
+                "--output-markdown",
+                str(review_md),
+                "--output-csv",
+                str(review_csv),
+                "--workers",
+                str(args.workers),
+            ],
+            step="generate_review",
+        )
+        _run(
+            [
+                PY,
+                "analyze_edge_conditions.py",
+                "--seed",
+                str(review_json),
+                "--output",
+                str(edge_json),
+                "--workers",
+                str(max(2, args.workers // 2)),
+            ],
+            step="edge_conditions",
+        )
+        _run(
+            [
+                PY,
+                "backtest_weekly_macd_ma.py",
+                "--seed",
+                str(review_json),
+                "--output",
+                str(weekly_json),
+                "--apply-review",
+                str(review_json),
+                "--workers",
+                str(args.workers),
+            ],
+            step="weekly_backtest",
+        )
+        _run(
+            [
+                PY,
+                "backtest_daily_kdj_macd.py",
+                "--date",
+                day,
+                "--workers",
+                str(args.workers),
+                "--output",
+                str(kdj_json),
+            ],
+            step="daily_kdj_macd",
+        )
+        _run(
+            [
+                PY,
+                "build_substantive_impact_events.py",
+                "--date",
+                day,
+                "--per-side",
+                "10",
+                "--workers",
+                str(args.workers),
+                "--output",
+                str(impact_json),
+            ],
+            step="impact_events",
+        )
+        _run(
+            [
+                PY,
+                "build_event_etf_impact_matrix.py",
+                "--date",
+                day,
+                "--output",
+                str(matrix_json),
+            ],
+            step="event_matrix",
+        )
+
+        bundle = assemble_ui_bundle(day)
+        latest = OUT_DIR / "latest.json"
+        dated = OUT_DIR / f"bundle-{day}.json"
+        latest.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        dated.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        print(
+            json.dumps(
+                {
+                    "event": "done",
+                    "ok": True,
+                    "dataDate": bundle["dataDate"],
+                    "rowCount": len(bundle["rows"]),
+                    "latestPath": str(latest),
+                    "counts": bundle["counts"],
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"event": "error", "ok": False, "error": str(exc)}, ensure_ascii=False), flush=True)
+        return 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p_gen = sub.add_parser("generate", help="Run full daily pipeline")
+    p_gen.add_argument("--date", default=None)
+    p_gen.add_argument("--seed", default=None)
+    p_gen.add_argument("--workers", type=int, default=6)
+    p_gen.set_defaults(func=cmd_generate)
+
+    p_load = sub.add_parser("load-latest", help="Print latest UI bundle")
+    p_load.set_defaults(func=cmd_load_latest)
+
+    p_asm = sub.add_parser("assemble", help="Assemble UI bundle from existing reports")
+    p_asm.add_argument("--date", default=None)
+    p_asm.set_defaults(func=cmd_assemble)
+
+    p_chk = sub.add_parser("check-python", help="Verify runtime")
+    p_chk.set_defaults(func=cmd_check_python)
+
+    args = ap.parse_args()
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

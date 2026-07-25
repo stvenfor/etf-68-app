@@ -1,0 +1,16 @@
+node_modules/
+desktop/dist/
+dist/
+dist-electron/
+release/
+.DS_Store
+*.pyc
+__pycache__/
+.pytest_cache/
+engine/state/
+engine/reports/
+data/out/
+*.log
+.env
+.venv/
+venv/

@@ -1,0 +1,33 @@
+appId: com.local.etf68app
+productName: ETF-68
+copyright: Copyright © 2026
+directories:
+  output: release
+files:
+  - desktop/dist/**/*
+  - desktop/electron/**/*
+  - package.json
+extraResources:
+  - from: engine
+    to: engine
+    filter:
+      - "**/*"
+      - "!reports/**"
+      - "!state/**"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+      - "!tests/**"
+  - from: data/static
+    to: seed-static
+    filter:
+      - "**/*"
+  - from: engine/reports
+    to: seed-reports
+    filter:
+      - "*.json"
+mac:
+  category: public.app-category.finance
+  target:
+    - dmg
+    - zip
+  identity: null

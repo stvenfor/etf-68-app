@@ -1,0 +1,598 @@
+{
+  "asOf": "2026-07-24",
+  "generatedAt": "2026-07-25T22:26:33.248281",
+  "months": [
+    {
+      "month": 1,
+      "label": "2026-01",
+      "days": [
+        {
+          "date": "2026-01-16",
+          "weekday": "周五",
+          "citicTotal": -2301,
+          "stance": "净加空",
+          "label": "加空单2301手",
+          "IH": -182,
+          "IF": -861,
+          "IC": 700,
+          "IM": -1958,
+          "isDelivery": true
+        }
+      ],
+      "monthNet": -2301,
+      "longDays": 0,
+      "shortDays": 1,
+      "n": 1
+    },
+    {
+      "month": 2,
+      "label": "2026-02",
+      "days": [
+        {
+          "date": "2026-02-24",
+          "weekday": "周二",
+          "citicTotal": -1563,
+          "stance": "净加空",
+          "label": "加空单1563手",
+          "IH": 337,
+          "IF": -423,
+          "IC": -1363,
+          "IM": -114,
+          "isDelivery": true
+        }
+      ],
+      "monthNet": -1563,
+      "longDays": 0,
+      "shortDays": 1,
+      "n": 1
+    },
+    {
+      "month": 3,
+      "label": "2026-03",
+      "days": [
+        {
+          "date": "2026-03-20",
+          "weekday": "周五",
+          "citicTotal": -6326,
+          "stance": "净加空",
+          "label": "加空单6326手",
+          "IH": 455,
+          "IF": -2090,
+          "IC": -3679,
+          "IM": -1012,
+          "isDelivery": true
+        }
+      ],
+      "monthNet": -6326,
+      "longDays": 0,
+      "shortDays": 1,
+      "n": 1
+    },
+    {
+      "month": 4,
+      "label": "2026-04",
+      "days": [
+        {
+          "date": "2026-04-17",
+          "weekday": "周五",
+          "citicTotal": 1909,
+          "stance": "净加多",
+          "label": "加多单1909手",
+          "IH": -828,
+          "IF": 1827,
+          "IC": 505,
+          "IM": 405,
+          "isDelivery": true
+        }
+      ],
+      "monthNet": 1909,
+      "longDays": 1,
+      "shortDays": 0,
+      "n": 1
+    },
+    {
+      "month": 5,
+      "label": "2026-05",
+      "days": [
+        {
+          "date": "2026-05-15",
+          "weekday": "周五",
+          "citicTotal": -898,
+          "stance": "净加空",
+          "label": "加空单898手",
+          "IH": 964,
+          "IF": -538,
+          "IC": 986,
+          "IM": -2310,
+          "isDelivery": true
+        },
+        {
+          "date": "2026-05-29",
+          "weekday": "周五",
+          "citicTotal": 206,
+          "stance": "净加多",
+          "label": "加多单206手",
+          "IH": 24,
+          "IF": 588,
+          "IC": 1073,
+          "IM": -1479,
+          "isDelivery": false
+        }
+      ],
+      "monthNet": -692,
+      "longDays": 1,
+      "shortDays": 1,
+      "n": 2
+    },
+    {
+      "month": 6,
+      "label": "2026-06",
+      "days": [
+        {
+          "date": "2026-06-01",
+          "weekday": "周一",
+          "citicTotal": -191,
+          "stance": "净加空",
+          "label": "加空单191手",
+          "IH": 337,
+          "IF": -240,
+          "IC": -388,
+          "IM": 100,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-02",
+          "weekday": "周二",
+          "citicTotal": 927,
+          "stance": "净加多",
+          "label": "加多单927手",
+          "IH": 230,
+          "IF": 509,
+          "IC": -36,
+          "IM": 224,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-03",
+          "weekday": "周三",
+          "citicTotal": 100,
+          "stance": "净加多",
+          "label": "加多单100手",
+          "IH": -122,
+          "IF": -541,
+          "IC": 265,
+          "IM": 498,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-04",
+          "weekday": "周四",
+          "citicTotal": -2436,
+          "stance": "净加空",
+          "label": "加空单2436手",
+          "IH": 123,
+          "IF": -2000,
+          "IC": -508,
+          "IM": -51,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-05",
+          "weekday": "周五",
+          "citicTotal": 1040,
+          "stance": "净加多",
+          "label": "加多单1040手",
+          "IH": -152,
+          "IF": -317,
+          "IC": 633,
+          "IM": 876,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-08",
+          "weekday": "周一",
+          "citicTotal": -2783,
+          "stance": "净加空",
+          "label": "加空单2783手",
+          "IH": 85,
+          "IF": 860,
+          "IC": -1638,
+          "IM": -2090,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-09",
+          "weekday": "周二",
+          "citicTotal": 3815,
+          "stance": "净加多",
+          "label": "加多单3815手",
+          "IH": -763,
+          "IF": 1552,
+          "IC": 37,
+          "IM": 2989,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-10",
+          "weekday": "周三",
+          "citicTotal": 192,
+          "stance": "净加多",
+          "label": "加多单192手",
+          "IH": 691,
+          "IF": -307,
+          "IC": -386,
+          "IM": 194,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-11",
+          "weekday": "周四",
+          "citicTotal": -1231,
+          "stance": "净加空",
+          "label": "加空单1231手",
+          "IH": -176,
+          "IF": 287,
+          "IC": -103,
+          "IM": -1239,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-12",
+          "weekday": "周五",
+          "citicTotal": 3495,
+          "stance": "净加多",
+          "label": "加多单3495手",
+          "IH": -354,
+          "IF": 2879,
+          "IC": 1178,
+          "IM": -208,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-17",
+          "weekday": "周三",
+          "citicTotal": 315,
+          "stance": "净加多",
+          "label": "加多单315手",
+          "IH": 59,
+          "IF": 83,
+          "IC": 23,
+          "IM": 150,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-18",
+          "weekday": "周四",
+          "citicTotal": 1160,
+          "stance": "净加多",
+          "label": "加多单1160手",
+          "IH": -538,
+          "IF": 855,
+          "IC": 538,
+          "IM": 305,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-22",
+          "weekday": "周一",
+          "citicTotal": -5410,
+          "stance": "净加空",
+          "label": "加空单5410手",
+          "IH": 2146,
+          "IF": -3932,
+          "IC": -1313,
+          "IM": -2311,
+          "isDelivery": true
+        },
+        {
+          "date": "2026-06-23",
+          "weekday": "周二",
+          "citicTotal": 1446,
+          "stance": "净加多",
+          "label": "加多单1446手",
+          "IH": -853,
+          "IF": 711,
+          "IC": 737,
+          "IM": 851,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-24",
+          "weekday": "周三",
+          "citicTotal": 1425,
+          "stance": "净加多",
+          "label": "加多单1425手",
+          "IH": 429,
+          "IF": 673,
+          "IC": 315,
+          "IM": 8,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-25",
+          "weekday": "周四",
+          "citicTotal": -1338,
+          "stance": "净加空",
+          "label": "加空单1338手",
+          "IH": -155,
+          "IF": -1067,
+          "IC": 400,
+          "IM": -516,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-26",
+          "weekday": "周五",
+          "citicTotal": -784,
+          "stance": "净加空",
+          "label": "加空单784手",
+          "IH": 429,
+          "IF": -1303,
+          "IC": -449,
+          "IM": 539,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-29",
+          "weekday": "周一",
+          "citicTotal": 1082,
+          "stance": "净加多",
+          "label": "加多单1082手",
+          "IH": 22,
+          "IF": 899,
+          "IC": 481,
+          "IM": -320,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-06-30",
+          "weekday": "周二",
+          "citicTotal": 1502,
+          "stance": "净加多",
+          "label": "加多单1502手",
+          "IH": 57,
+          "IF": 377,
+          "IC": -87,
+          "IM": 1155,
+          "isDelivery": false
+        }
+      ],
+      "monthNet": 2326,
+      "longDays": 12,
+      "shortDays": 7,
+      "n": 19
+    },
+    {
+      "month": 7,
+      "label": "2026-07",
+      "days": [
+        {
+          "date": "2026-07-01",
+          "weekday": "周三",
+          "citicTotal": -261,
+          "stance": "净加空",
+          "label": "加空单261手",
+          "IH": -131,
+          "IF": -1016,
+          "IC": 125,
+          "IM": 761,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-02",
+          "weekday": "周四",
+          "citicTotal": -3551,
+          "stance": "净加空",
+          "label": "加空单3551手",
+          "IH": 769,
+          "IF": -535,
+          "IC": -1414,
+          "IM": -2371,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-03",
+          "weekday": "周五",
+          "citicTotal": -2958,
+          "stance": "净加空",
+          "label": "加空单2958手",
+          "IH": -937,
+          "IF": 208,
+          "IC": -1299,
+          "IM": -930,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-06",
+          "weekday": "周一",
+          "citicTotal": -2676,
+          "stance": "净加空",
+          "label": "加空单2676手",
+          "IH": -218,
+          "IF": 413,
+          "IC": -398,
+          "IM": -2473,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-07",
+          "weekday": "周二",
+          "citicTotal": -1389,
+          "stance": "净加空",
+          "label": "加空单1389手",
+          "IH": 325,
+          "IF": -525,
+          "IC": -468,
+          "IM": -721,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-08",
+          "weekday": "周三",
+          "citicTotal": -2697,
+          "stance": "净加空",
+          "label": "加空单2697手",
+          "IH": 160,
+          "IF": -222,
+          "IC": -1725,
+          "IM": -910,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-09",
+          "weekday": "周四",
+          "citicTotal": -3761,
+          "stance": "净加空",
+          "label": "加空单3761手",
+          "IH": -413,
+          "IF": -779,
+          "IC": -1424,
+          "IM": -1145,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-10",
+          "weekday": "周五",
+          "citicTotal": 1523,
+          "stance": "净加多",
+          "label": "加多单1523手",
+          "IH": 163,
+          "IF": -24,
+          "IC": 1510,
+          "IM": -126,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-13",
+          "weekday": "周一",
+          "citicTotal": 2450,
+          "stance": "净加多",
+          "label": "加多单2450手",
+          "IH": 815,
+          "IF": -60,
+          "IC": 963,
+          "IM": 732,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-14",
+          "weekday": "周二",
+          "citicTotal": -826,
+          "stance": "净加空",
+          "label": "加空单826手",
+          "IH": -1149,
+          "IF": 463,
+          "IC": 105,
+          "IM": -245,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-15",
+          "weekday": "周三",
+          "citicTotal": -150,
+          "stance": "净加空",
+          "label": "加空单150手",
+          "IH": 75,
+          "IF": 2192,
+          "IC": -1590,
+          "IM": -827,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-16",
+          "weekday": "周四",
+          "citicTotal": 836,
+          "stance": "净加多",
+          "label": "加多单836手",
+          "IH": -26,
+          "IF": -204,
+          "IC": 580,
+          "IM": 486,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-17",
+          "weekday": "周五",
+          "citicTotal": -1604,
+          "stance": "净加空",
+          "label": "加空单1604手",
+          "IH": 449,
+          "IF": -1201,
+          "IC": 119,
+          "IM": -971,
+          "isDelivery": true
+        },
+        {
+          "date": "2026-07-20",
+          "weekday": "周一",
+          "citicTotal": 1244,
+          "stance": "净加多",
+          "label": "加多单1244手",
+          "IH": 2155,
+          "IF": 116,
+          "IC": -474,
+          "IM": -553,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-21",
+          "weekday": "周二",
+          "citicTotal": 7657,
+          "stance": "净加多",
+          "label": "加多单7657手",
+          "IH": 1289,
+          "IF": 1213,
+          "IC": 2341,
+          "IM": 2814,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-22",
+          "weekday": "周三",
+          "citicTotal": 1435,
+          "stance": "净加多",
+          "label": "加多单1435手",
+          "IH": 42,
+          "IF": 406,
+          "IC": -945,
+          "IM": 1932,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-23",
+          "weekday": "周四",
+          "citicTotal": -564,
+          "stance": "净加空",
+          "label": "加空单564手",
+          "IH": -800,
+          "IF": 69,
+          "IC": -84,
+          "IM": 251,
+          "isDelivery": false
+        },
+        {
+          "date": "2026-07-24",
+          "weekday": "周五",
+          "citicTotal": 178,
+          "stance": "净加多",
+          "label": "加多单178手",
+          "IH": 1234,
+          "IF": -334,
+          "IC": 611,
+          "IM": -1333,
+          "isDelivery": false
+        }
+      ],
+      "monthNet": -5114,
+      "longDays": 7,
+      "shortDays": 11,
+      "n": 18
+    }
+  ],
+  "stats": {
+    "fetched": 0,
+    "cached": 43,
+    "fail": 104,
+    "daysWanted": 147
+  }
+}

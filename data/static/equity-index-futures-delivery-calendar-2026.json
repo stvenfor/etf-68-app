@@ -1,0 +1,98 @@
+{
+  "year": 2026,
+  "rule": "到期月第三个星期五；遇法定假日顺延下一交易日",
+  "products": [
+    "IF",
+    "IH",
+    "IC",
+    "IM"
+  ],
+  "asOf": "2026-07-25",
+  "holidaySource": "国办发明电〔2025〕7号",
+  "months": [
+    {
+      "month": 1,
+      "thirdFriday": "2026-01-16",
+      "delivery": "2026-01-16",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 2,
+      "thirdFriday": "2026-02-20",
+      "delivery": "2026-02-24",
+      "shifted": true,
+      "note": "春节顺延"
+    },
+    {
+      "month": 3,
+      "thirdFriday": "2026-03-20",
+      "delivery": "2026-03-20",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 4,
+      "thirdFriday": "2026-04-17",
+      "delivery": "2026-04-17",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 5,
+      "thirdFriday": "2026-05-15",
+      "delivery": "2026-05-15",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 6,
+      "thirdFriday": "2026-06-19",
+      "delivery": "2026-06-22",
+      "shifted": true,
+      "note": "端午顺延"
+    },
+    {
+      "month": 7,
+      "thirdFriday": "2026-07-17",
+      "delivery": "2026-07-17",
+      "shifted": false,
+      "note": "已交割"
+    },
+    {
+      "month": 8,
+      "thirdFriday": "2026-08-21",
+      "delivery": "2026-08-21",
+      "shifted": false,
+      "note": "下一场"
+    },
+    {
+      "month": 9,
+      "thirdFriday": "2026-09-18",
+      "delivery": "2026-09-18",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 10,
+      "thirdFriday": "2026-10-16",
+      "delivery": "2026-10-16",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 11,
+      "thirdFriday": "2026-11-20",
+      "delivery": "2026-11-20",
+      "shifted": false,
+      "note": ""
+    },
+    {
+      "month": 12,
+      "thirdFriday": "2026-12-18",
+      "delivery": "2026-12-18",
+      "shifted": false,
+      "note": ""
+    }
+  ]
+}
