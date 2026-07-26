@@ -366,6 +366,36 @@ def cmd_load_latest(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_funds_top30(args: argparse.Namespace) -> int:
+    """Build / refresh the 30 open-end mutual-fund representative pool."""
+    from src.funds_top30 import build_funds_top30, write_funds_top30
+
+    out = Path(args.output) if args.output else (OUT_DIR / "funds-top30.json")
+    previous = None
+    if out.exists() and not args.rebuild:
+        try:
+            previous = json.loads(out.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            previous = None
+
+    try:
+        result = build_funds_top30(rebuild=bool(args.rebuild), previous=previous)
+        write_funds_top30(out, result)
+        summary = {
+            "ok": True,
+            "asOf": result.get("asOf"),
+            "counts": result.get("counts"),
+            "rowCount": len(result.get("rows") or []),
+            "outputPath": str(out),
+            "rebuilt": bool(args.rebuild) or not previous,
+        }
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
 def cmd_review_script(args: argparse.Namespace) -> int:
     """Build daily market-review narration JSON from a UiBundle."""
     from src.review_script import build_review_script
@@ -605,6 +635,19 @@ def main() -> int:
         help="Optional path to write the review-script JSON",
     )
     p_rev.set_defaults(func=cmd_review_script)
+
+    p_funds = sub.add_parser("funds-top30", help="Build/refresh 30 open-end fund pool + NAV")
+    p_funds.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Re-rank universe by AUM (otherwise reuse cached codes)",
+    )
+    p_funds.add_argument(
+        "--output",
+        default=None,
+        help="Output JSON path (default: data/out/funds-top30.json)",
+    )
+    p_funds.set_defaults(func=cmd_funds_top30)
 
     args = ap.parse_args()
     return int(args.func(args))

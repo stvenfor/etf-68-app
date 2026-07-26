@@ -105,6 +105,32 @@ export type UiBundle = {
   } | null;
 };
 
+export type FundTop30Row = {
+  code: string;
+  name: string;
+  category: string;
+  categoryLabel?: string;
+  aumYi?: number | null;
+  nav?: number | null;
+  navDate?: string | null;
+  dayChangePct?: number | null;
+  estimateNav?: number | null;
+  estimateChange?: number | null;
+  estimateChangePct?: number | null;
+  estimateTime?: string | null;
+  rankInCategory?: number | null;
+  error?: string;
+};
+
+export type FundsTop30Bundle = {
+  ok?: boolean;
+  asOf?: string;
+  quota?: Record<string, number>;
+  counts?: Record<string, number>;
+  rows: FundTop30Row[];
+  source?: Record<string, string>;
+};
+
 declare global {
   interface Window {
     etf68: {
@@ -140,6 +166,17 @@ declare global {
         voice?: string;
         cached?: boolean;
         bytes?: number;
+        error?: string;
+      }>;
+      loadFundsTop30: () => Promise<{
+        ok: boolean;
+        bundle?: FundsTop30Bundle;
+        error?: string;
+      }>;
+      refreshFundsTop30: (payload?: { rebuild?: boolean }) => Promise<{
+        ok: boolean;
+        bundle?: FundsTop30Bundle;
+        rebuilt?: boolean;
         error?: string;
       }>;
       onGenerateLog: (cb: (line: string) => void) => () => void;

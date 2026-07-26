@@ -17,6 +17,7 @@ import {
   uniqSorted,
 } from "./filters";
 import DashboardBoard from "./dashboard/DashboardBoard";
+import FundsTop30Panel from "./FundsTop30Panel";
 import { buildDailyNarration } from "./narration";
 import type { UiBundle } from "./types";
 
@@ -212,7 +213,7 @@ export default function App() {
         </button>
       </header>
 
-      {tab !== "board" && (
+      {tab !== "board" && tab !== "funds30" && (
         <section className="stats">
           <div className="stat">
             <div className="label">状态</div>
@@ -260,7 +261,11 @@ export default function App() {
       </nav>
 
       <main className="main">
-        {!bundle && <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>}
+        {tab === "funds30" && <FundsTop30Panel />}
+
+        {tab !== "funds30" && !bundle && (
+          <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>
+        )}
 
         {bundle && tab === "board" && <DashboardBoard bundle={bundle} />}
 

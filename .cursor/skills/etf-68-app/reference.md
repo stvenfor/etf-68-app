@@ -118,6 +118,20 @@ python3.12 cli_app.py review-script [--date YYYY-MM-DD] [--bundle PATH] [--outpu
 
 章节与软预算（秒，**仅提示，不硬裁 VO**）见 `engine/src/review_script.py` 的 `CHAPTER_BUDGETS`。
 
+### `funds-top30`
+
+场外开放式「30 公募」代表池：各大类内按近似规模（份额×净值）取前 N（股4/债4/混16/QDII4），写出最新已公布单位净值与实时估值。混合型另有 `FORCE_INCLUDE` / `FORCE_EXCLUDE` 手动增删。
+
+```bash
+python3.12 cli_app.py funds-top30 [--rebuild] [--output PATH]
+```
+
+- `--rebuild`：重新拉新浪规模榜选池并刷净值  
+- 无 `--rebuild`：复用 `data/out/funds-top30.json` 名单，仅刷东方财富 pingzhong 净值 + 新浪实时估值  
+- 排除 ETF / **ETF联接**（名称含「联接」）/ 货币；同基金多份额只留规模最大的一只  
+- 各大类按配额上限截取，**不足则按实际数量**（不强行凑满 30）  
+- 实时估值字段：`estimateNav` / `estimateChangePct`（相对最新公布净值的当天估算涨跌）/ `estimateTime` 
+
 ## UiBundle 要点
 
 `data/out/latest.json` 主要字段（以代码为准）：

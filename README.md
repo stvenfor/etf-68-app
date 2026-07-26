@@ -1,8 +1,8 @@
 # ETF-68 Mac 桌面版
 
-本地一键生成 68 只代表池 ETF 日更技术面，并在桌面窗口里筛选查看（交割日历 / 中信多空 / 事件矩阵 / 实质利好利空 / 明细表）。
+本地一键生成 68 只代表池 ETF 日更技术面，并在桌面窗口里筛选查看（交割日历 / 中信多空 / 事件矩阵 / 实质利好利空 / 明细表）。另含并存页签「30 公募」：按大类规模选取场外开放式代表池并展示最新已公布净值。
 
-Agent / 详细用法见 [`.cursor/skills/etf-68-app/`](.cursor/skills/etf-68-app/)（含 Edge TTS、复盘 MP4、OpenCut 流程）。
+Agent / 详细用法见 [`.cursor/skills/etf-68-app/`](.cursor/skills/etf-68-app/)（含 Edge TTS、复盘 MP4、OpenCut、30 公募流程）。
 
 ## 环境
 
@@ -27,6 +27,16 @@ npm run engine:generate
 ```
 
 产物：`data/out/latest.json`，明细中间件在 `engine/reports/`。
+
+## 30 公募
+
+```bash
+cd engine && python3.12 cli_app.py funds-top30 --rebuild
+# 仅刷新净值（复用名单）
+python3.12 cli_app.py funds-top30
+```
+
+产物：`data/out/funds-top30.json`。应用内「30 公募」页签可加载缓存并一键刷新。
 
 ## 打包
 

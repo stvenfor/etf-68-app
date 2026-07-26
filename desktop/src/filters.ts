@@ -2,6 +2,7 @@ import type { EtfRow } from "./types";
 
 export const MAIN_TABS = [
   { id: "board", label: "数据看板" },
+  { id: "funds30", label: "30 公募" },
   { id: "delivery", label: "交割日历" },
   { id: "citic", label: "中信多空" },
   { id: "events", label: "事件→ETF" },
