@@ -39,6 +39,7 @@ def _row() -> dict[str, object]:
         "macd": {"dif": 0.023, "dea": 0.018, "histogram": 0.01, "state": "零轴上多头"},
         "sentiment": {"score": 64.5, "label": "偏热", "missing_inputs": []},
         "flows": {
+            "1": {"value_cny": 45_000_000, "reason": None, "price_basis": "close"},
             "5": {"value_cny": 123_000_000, "reason": None, "price_basis": "close"},
             "10": {"value_cny": None, "reason": "missing_share_date", "price_basis": "close"},
             "20": {"value_cny": -456_000_000, "reason": None, "price_basis": "close"},
@@ -91,9 +92,11 @@ class ReportRenderingTests(unittest.TestCase):
         rendered = render_report_markdown(self.report)
 
         for header in (
+            "动量轮动",
             "KDJ",
             "MACD",
             "情绪",
+            "当日份额净流入",
             "5日份额净流入",
             "10日份额净流入",
             "20日份额净流入",
@@ -114,6 +117,7 @@ class ReportRenderingTests(unittest.TestCase):
 
         self.assertEqual(1, len(rows))
         self.assertEqual("510050", rows[0]["代码"])
+        self.assertEqual("—", rows[0]["动量轮动"])
         self.assertEqual("70.10", rows[0]["K"])
         self.assertEqual("0.010000", rows[0]["MACD柱"])
         self.assertEqual("123000000.00", rows[0]["5日份额净流入_元"])

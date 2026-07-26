@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 from statistics import fmean
 from typing import Any, Mapping, Sequence
 
@@ -18,6 +18,7 @@ from .reporting import (
     score_sentiment,
     validate_sector_context,
 )
+from .mom20_ma28 import apply_mom20_ma28
 from .weekly_signals import (
     DEFAULT_MA_PAIR,
     DEFAULT_MACD_MODE,
@@ -66,6 +67,7 @@ def build_report(
             raise ValueError(f"insufficient_report_bars:{code}")
         close = bars[-1].close
         ma20 = fmean(bar.close for bar in bars[-20:])
+        ma28 = fmean(bar.close for bar in bars[-28:]) if len(bars) >= 28 else None
         ma60 = fmean(bar.close for bar in bars[-60:])
         prior_ma20 = fmean(bar.close for bar in bars[-25:-5])
         ma20_rising = ma20 > prior_ma20
@@ -128,6 +130,7 @@ def build_report(
                 "date": bars[-1].date.isoformat(),
                 "close": close,
                 "ma20": ma20,
+                "ma28": ma28,
                 "ma60": ma60,
                 "ma20_rising": ma20_rising,
                 "ret1_pct": ret1,
@@ -182,6 +185,8 @@ def build_report(
         row.pop("flow_status", None)
         row.pop("reason", None)
         output_rows.append(row)
+    as_of = max(date.fromisoformat(str(row["date"])) for row in output_rows)
+    mom_meta = apply_mom20_ma28(output_rows, bars_by_code, as_of=as_of)
     output_rows.sort(
         key=lambda row: (
             _action_rank(str(row["action"])),
@@ -207,6 +212,7 @@ def build_report(
             "gateRequiredForCandidate": True,
             "volumePrice": "量升价增看多；量升价不涨看空并拦截技术候选",
         },
+        "mom20_ma28_framework": mom_meta,
         "rows": output_rows,
     }
 
@@ -222,7 +228,7 @@ def _flows_for_code(
         return (
             {
                 window: FlowWindow(window, None, "close", error)
-                for window in (5, 10, 20)
+                for window in (1, 5, 10, 20)
             },
             None,
         )

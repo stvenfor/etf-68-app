@@ -90,6 +90,7 @@ function runPython(args, { onLine } = {}) {
     // Point static data via symlink-like path: REPO_ROOT/data/static relative to engine parent
     // Packaged engine's parent is resources; we also set a helper env.
     env.ETF68_STATIC_DIR = staticDir();
+    env.ETF68_TTS_CACHE = path.join(outDir(), "tts-cache");
 
     delete env.HTTP_PROXY;
     delete env.HTTPS_PROXY;
@@ -210,6 +211,38 @@ ipcMain.handle("assemble-latest", async (_event, payload = {}) => {
     if (!parsed.ok) return parsed;
     const latest = path.join(outDir(), "latest.json");
     return { ok: true, bundle: JSON.parse(fs.readFileSync(latest, "utf8")) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("speak-text", async (_event, payload = {}) => {
+  const text = String(payload.text || "").trim();
+  if (!text) return { ok: false, error: "empty_text" };
+
+  const args = ["cli_app.py", "tts", "--text", text];
+  if (payload.voice) args.push("--voice", String(payload.voice));
+  if (payload.rate) args.push("--rate", String(payload.rate));
+  if (payload.pitch) args.push("--pitch", String(payload.pitch));
+  if (payload.force) args.push("--force");
+
+  try {
+    const { stdout } = await runPython(args);
+    const line = stdout.trim().split(/\r?\n/).pop();
+    const parsed = JSON.parse(line);
+    if (!parsed.ok || !parsed.path) return parsed;
+    if (!fs.existsSync(parsed.path)) {
+      return { ok: false, error: "tts_file_missing" };
+    }
+    const audioBase64 = fs.readFileSync(parsed.path).toString("base64");
+    return {
+      ok: true,
+      audioBase64,
+      mime: "audio/mpeg",
+      voice: parsed.voice,
+      cached: Boolean(parsed.cached),
+      bytes: parsed.bytes,
+    };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }

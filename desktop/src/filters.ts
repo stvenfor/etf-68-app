@@ -1,6 +1,7 @@
 import type { EtfRow } from "./types";
 
 export const MAIN_TABS = [
+  { id: "board", label: "数据看板" },
   { id: "delivery", label: "交割日历" },
   { id: "citic", label: "中信多空" },
   { id: "events", label: "事件→ETF" },
@@ -9,6 +10,7 @@ export const MAIN_TABS = [
 ] as const;
 
 export const ACTIONS = ["全部", "技术候选", "观察", "不追涨", "暂缓"] as const;
+export const MOM20_MA28 = ["全部", "买入", "持有", "换仓", "—"] as const;
 export const TRENDS = ["全部", "多头", "震荡", "空头"] as const;
 export const SIGN_OPTS = ["全部", "正", "负", "持平/--"] as const;
 export const DD_OPTS = ["全部", "浅(<3%)", "中(3-8%)", "深(8-15%)", "极深(≥15%)"] as const;
@@ -27,6 +29,8 @@ export const SORTS = [
   { value: "rsi_asc", label: "排序：RSI↑" },
   { value: "sentiment_desc", label: "排序：情绪↓" },
   { value: "sentiment_asc", label: "排序：情绪↑" },
+  { value: "flow1_desc", label: "排序：当日净流入↓" },
+  { value: "flow1_asc", label: "排序：当日净流入↑" },
   { value: "flow5_desc", label: "排序：5日净流入↓" },
   { value: "flow5_asc", label: "排序：5日净流入↑" },
   { value: "report", label: "排序：报告原序" },
@@ -34,6 +38,7 @@ export const SORTS = [
 
 export type DetailFilters = {
   action: string;
+  mom20Ma28: string;
   etf: string;
   sector: string;
   trend: string;
@@ -55,6 +60,7 @@ export type DetailFilters = {
 
 export const DEFAULT_FILTERS: DetailFilters = {
   action: "全部",
+  mom20Ma28: "全部",
   etf: "全部",
   sector: "全部",
   trend: "全部",
@@ -121,6 +127,7 @@ export function uniqSorted(vals: Array<string | null | undefined>): string[] {
 export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
   let out = rows.filter((r) => {
     if (f.action !== "全部" && r.action !== f.action) return false;
+    if (f.mom20Ma28 !== "全部" && (r.mom20Ma28 || "—") !== f.mom20Ma28) return false;
     if (f.etf !== "全部" && r.code !== f.etf) return false;
     if (f.sector !== "全部" && r.sector !== f.sector) return false;
     if (f.trend !== "全部" && r.trend !== f.trend) return false;
@@ -153,6 +160,7 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
       dd10: a.dd10,
       rsi: a.rsi,
       sentiment: a.sentiment,
+      flow1: a.flow1,
       flow5: a.flow5,
     };
     const mapB: Record<string, number | null | undefined> = {
@@ -162,6 +170,7 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
       dd10: b.dd10,
       rsi: b.rsi,
       sentiment: b.sentiment,
+      flow1: b.flow1,
       flow5: b.flow5,
     };
     const av = map[key];

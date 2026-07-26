@@ -1,5 +1,8 @@
 export type EtfRow = {
   action: string;
+  mom20Ma28: string;
+  ret20Rank: number | null;
+  aboveMa28: boolean;
   code: string;
   name: string;
   trend: string;
@@ -24,6 +27,7 @@ export type EtfRow = {
   volumePrice: string;
   sentiment: number | null;
   sentimentLabel: string;
+  flow1: number | null;
   flow5: number | null;
   flow10: number | null;
   sector: string;
@@ -104,7 +108,13 @@ export type UiBundle = {
 declare global {
   interface Window {
     etf68: {
-      checkPython: () => Promise<{ ok: boolean; python?: string; error?: string }>;
+      checkPython: () => Promise<{
+        ok: boolean;
+        python?: string;
+        error?: string;
+        ttsOk?: boolean;
+        ttsError?: string | null;
+      }>;
       loadLatest: () => Promise<{ ok: boolean; bundle?: UiBundle; error?: string }>;
       generateDaily: (payload?: { date?: string; workers?: number }) => Promise<{
         ok: boolean;
@@ -115,6 +125,21 @@ declare global {
       assembleLatest: (payload?: { date?: string }) => Promise<{
         ok: boolean;
         bundle?: UiBundle;
+        error?: string;
+      }>;
+      speakText: (payload: {
+        text: string;
+        voice?: string;
+        rate?: string;
+        pitch?: string;
+        force?: boolean;
+      }) => Promise<{
+        ok: boolean;
+        audioBase64?: string;
+        mime?: string;
+        voice?: string;
+        cached?: boolean;
+        bytes?: number;
         error?: string;
       }>;
       onGenerateLog: (cb: (line: string) => void) => () => void;

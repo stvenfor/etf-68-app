@@ -100,6 +100,7 @@ class ReportingFlowTests(unittest.TestCase):
     def test_share_flows_sum_last_5_10_20_trading_day_deltas(self) -> None:
         flows = calculate_share_flows(self.shares, self.bars)
 
+        self.assertEqual(20, flows[1].value_cny)
         self.assertEqual(100, flows[5].value_cny)
         self.assertEqual(200, flows[10].value_cny)
         self.assertEqual(400, flows[20].value_cny)

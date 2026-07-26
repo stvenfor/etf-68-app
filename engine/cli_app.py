@@ -208,6 +208,9 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
         rows_out.append(
             {
                 "action": r.get("action"),
+                "mom20Ma28": r.get("mom20Ma28") or "—",
+                "ret20Rank": r.get("ret20_rank"),
+                "aboveMa28": bool(r.get("above_ma28")),
                 "code": code,
                 "name": r.get("name"),
                 "trend": r.get("trend") or r.get("weeklyTrend"),
@@ -234,6 +237,7 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
                 "volumePrice": vp.get("label") or "中性",
                 "sentiment": round(float(sent.get("score") or 0), 1),
                 "sentimentLabel": sent.get("label") or "—",
+                "flow1": _flow_yi(r.get("flows"), "1"),
                 "flow5": _flow_yi(r.get("flows"), "5"),
                 "flow10": _flow_yi(r.get("flows"), "10"),
                 "sector": sector_cn.get(sector_key, sector_key),
@@ -288,6 +292,14 @@ def _read_json(path: Path) -> Any | None:
 
 
 def cmd_check_python(_: argparse.Namespace) -> int:
+    tts_ok = False
+    tts_error = None
+    try:
+        import edge_tts  # noqa: F401
+
+        tts_ok = True
+    except Exception as exc:  # noqa: BLE001
+        tts_error = str(exc)
     print(
         json.dumps(
             {
@@ -295,11 +307,53 @@ def cmd_check_python(_: argparse.Namespace) -> int:
                 "python": sys.version.split()[0],
                 "executable": sys.executable,
                 "engineRoot": str(ENGINE_ROOT),
+                "ttsOk": tts_ok,
+                "ttsError": tts_error,
             },
             ensure_ascii=False,
         )
     )
     return 0
+
+
+def cmd_tts(args: argparse.Namespace) -> int:
+    """Synthesize Chinese speech with Edge TTS; prints JSON with audio path."""
+    text = (args.text or "").strip()
+    if not text and args.text_file:
+        text = Path(args.text_file).read_text(encoding="utf-8").strip()
+    if not text:
+        print(json.dumps({"ok": False, "error": "empty_text"}, ensure_ascii=False))
+        return 1
+
+    from src.tts_edge import DEFAULT_PITCH, DEFAULT_RATE, DEFAULT_VOICE, cache_key, synthesize
+
+    voice = args.voice or DEFAULT_VOICE
+    rate = args.rate or DEFAULT_RATE
+    pitch = args.pitch or DEFAULT_PITCH
+    cache_dir = Path(os.environ.get("ETF68_TTS_CACHE") or (OUT_DIR / "tts-cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = cache_key(text, voice, rate, pitch)
+    out_path = Path(args.output) if args.output else (cache_dir / f"{key}.mp3")
+
+    try:
+        if out_path.exists() and out_path.stat().st_size > 256 and not args.force:
+            result = {
+                "ok": True,
+                "path": str(out_path),
+                "bytes": out_path.stat().st_size,
+                "voice": voice,
+                "rate": rate,
+                "pitch": pitch,
+                "cached": True,
+            }
+        else:
+            result = synthesize(text, out_path, voice=voice, rate=rate, pitch=pitch)
+            result["cached"] = False
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
 
 
 def cmd_load_latest(_: argparse.Namespace) -> int:
@@ -310,6 +364,36 @@ def cmd_load_latest(_: argparse.Namespace) -> int:
     data = json.loads(latest.read_text(encoding="utf-8"))
     print(json.dumps({"ok": True, "bundle": data}, ensure_ascii=False))
     return 0
+
+
+def cmd_review_script(args: argparse.Namespace) -> int:
+    """Build daily market-review narration JSON from a UiBundle."""
+    from src.review_script import build_review_script
+
+    if args.date:
+        try:
+            bundle = assemble_ui_bundle(args.date)
+            OUT_DIR.mkdir(parents=True, exist_ok=True)
+            latest = OUT_DIR / "latest.json"
+            latest.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            return 1
+    else:
+        path = Path(args.bundle) if args.bundle else (OUT_DIR / "latest.json")
+        if not path.exists():
+            print(json.dumps({"ok": False, "error": f"bundle_missing:{path}"}, ensure_ascii=False))
+            return 1
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+
+    result = build_review_script(bundle)
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        result = {**result, "outputPath": str(out)}
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
 
 
 def cmd_assemble(args: argparse.Namespace) -> int:
@@ -497,6 +581,30 @@ def main() -> int:
 
     p_chk = sub.add_parser("check-python", help="Verify runtime")
     p_chk.set_defaults(func=cmd_check_python)
+
+    p_tts = sub.add_parser("tts", help="Synthesize speech with Edge TTS")
+    p_tts.add_argument("--text", default=None, help="Plain Chinese text to speak")
+    p_tts.add_argument("--text-file", default=None, help="Read text from file")
+    p_tts.add_argument("--output", default=None, help="Output mp3 path")
+    p_tts.add_argument("--voice", default=None, help="Edge neural voice id")
+    p_tts.add_argument("--rate", default=None, help='Prosody rate, e.g. "-8%"')
+    p_tts.add_argument("--pitch", default=None, help='Prosody pitch, e.g. "+0Hz"')
+    p_tts.add_argument("--force", action="store_true", help="Ignore cache")
+    p_tts.set_defaults(func=cmd_tts)
+
+    p_rev = sub.add_parser("review-script", help="Build daily market-review narration JSON")
+    p_rev.add_argument("--date", default=None, help="Assemble this date before scripting")
+    p_rev.add_argument(
+        "--bundle",
+        default=None,
+        help="Path to UiBundle JSON (default: latest.json)",
+    )
+    p_rev.add_argument(
+        "--output",
+        default=None,
+        help="Optional path to write the review-script JSON",
+    )
+    p_rev.set_defaults(func=cmd_review_script)
 
     args = ap.parse_args()
     return int(args.func(args))

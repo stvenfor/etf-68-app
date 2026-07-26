@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ACTIONS,
   DD_OPTS,
   DEFAULT_FILTERS,
   DetailFilters,
   MAIN_TABS,
+  MOM20_MA28,
   RSI_OPTS,
   SIGN_OPTS,
   SORTS,
@@ -15,6 +16,8 @@ import {
   hasActiveFilters,
   uniqSorted,
 } from "./filters";
+import DashboardBoard from "./dashboard/DashboardBoard";
+import { buildDailyNarration } from "./narration";
 import type { UiBundle } from "./types";
 
 function pctClass(v: number | null | undefined): string {
@@ -29,11 +32,18 @@ function actionTone(action: string): string {
   return "";
 }
 
+function momTone(signal: string): string {
+  if (signal === "买入" || signal === "持有") return "good";
+  if (signal === "换仓") return "warn";
+  return "";
+}
+
 export default function App() {
   const [bundle, setBundle] = useState<UiBundle | null>(null);
-  const [tab, setTab] = useState<string>("detail");
+  const [tab, setTab] = useState<string>("board");
   const [filters, setFilters] = useState<DetailFilters>(DEFAULT_FILTERS);
   const [busy, setBusy] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [status, setStatus] = useState("加载中…");
   const [logs, setLogs] = useState<string[]>([]);
   const [pyInfo, setPyInfo] = useState<string>("");
@@ -41,6 +51,8 @@ export default function App() {
   const [impactSector, setImpactSector] = useState("全部");
   const [impactSide, setImpactSide] = useState("全部");
   const [citicMonth, setCiticMonth] = useState<number | "全部">("全部");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speakGenRef = useRef(0);
 
   useEffect(() => {
     const off = window.etf68?.onGenerateLog?.((line) => {
@@ -48,7 +60,8 @@ export default function App() {
     });
     (async () => {
       const py = await window.etf68.checkPython();
-      setPyInfo(py.ok ? `Python ${py.python}` : `Python 不可用：${py.error || "unknown"}`);
+      const ttsHint = py.ttsOk === false ? " · TTS 未就绪(pip install edge-tts)" : "";
+      setPyInfo(py.ok ? `Python ${py.python}${ttsHint}` : `Python 不可用：${py.error || "unknown"}`);
       const loaded = await window.etf68.loadLatest();
       if (loaded.ok && loaded.bundle) {
         setBundle(loaded.bundle);
@@ -63,7 +76,13 @@ export default function App() {
       }
       setStatus(loaded.error || assembled.error || "无本地数据，请点击「生成今日」");
     })().catch((err) => setStatus(String(err)));
-    return () => off && off();
+    return () => {
+      off && off();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   const filtered = useMemo(() => (bundle ? filterRows(bundle.rows, filters) : []), [bundle, filters]);
@@ -102,6 +121,64 @@ export default function App() {
     }
   }
 
+  function stopSpeech() {
+    speakGenRef.current += 1;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
+    }
+    setSpeaking(false);
+  }
+
+  async function onSpeak() {
+    if (!bundle) return;
+    if (speaking) {
+      stopSpeech();
+      setStatus("已停止播报");
+      return;
+    }
+    const gen = ++speakGenRef.current;
+    setSpeaking(true);
+    setStatus("合成语音中…");
+    try {
+      const text = buildDailyNarration(bundle, filtered);
+      const res = await window.etf68.speakText({ text });
+      if (gen !== speakGenRef.current) return;
+      if (!res.ok || !res.audioBase64) {
+        setStatus(`播报失败：${res.error || "unknown"}`);
+        setSpeaking(false);
+        return;
+      }
+      const prev = audioRef.current;
+      if (prev) {
+        prev.pause();
+        prev.currentTime = 0;
+      }
+      const audio = new Audio(`data:${res.mime || "audio/mpeg"};base64,${res.audioBase64}`);
+      audioRef.current = audio;
+      audio.onended = () => {
+        if (gen !== speakGenRef.current) return;
+        audioRef.current = null;
+        setSpeaking(false);
+        setStatus(`已播报 ${bundle.dataDate}`);
+      };
+      audio.onerror = () => {
+        if (gen !== speakGenRef.current) return;
+        audioRef.current = null;
+        setSpeaking(false);
+        setStatus("播报播放失败");
+      };
+      setStatus(res.cached ? "播报中（缓存）…" : "播报中…");
+      await audio.play();
+    } catch (err) {
+      if (gen !== speakGenRef.current) return;
+      setSpeaking(false);
+      setStatus(String(err));
+    }
+  }
+
   function setFilter<K extends keyof DetailFilters>(key: K, value: DetailFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
@@ -112,13 +189,16 @@ export default function App() {
   const selectedEvent = matrixEvents.find((e) => e.id === eventId) || matrixEvents[0];
 
   return (
-    <div className="app">
+    <div className={`app ${tab === "board" ? "is-board" : ""}`}>
       <header className="topbar">
         <div className="brand">ETF-68</div>
         <div className="meta">
           {bundle ? `${bundle.dataDate} · 宽度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"} · {pyInfo}
         </div>
         <div className="spacer" />
+        <button className="btn" disabled={!bundle || busy} onClick={onSpeak}>
+          {speaking ? "停止播报" : "日更播报"}
+        </button>
         <button className="btn" disabled={busy} onClick={() => window.etf68.assembleLatest({}).then((r) => {
           if (r.ok && r.bundle) {
             setBundle(r.bundle);
@@ -132,32 +212,34 @@ export default function App() {
         </button>
       </header>
 
-      <section className="stats">
-        <div className="stat">
-          <div className="label">状态</div>
-          <div className="value">{status}</div>
-        </div>
-        <div className="stat">
-          <div className="label">技术候选</div>
-          <div className="value">{counts["技术候选"] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="label">观察</div>
-          <div className="value">{counts["观察"] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="label">不追涨</div>
-          <div className="value">{counts["不追涨"] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="label">暂缓</div>
-          <div className="value">{counts["暂缓"] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="label">明细行数</div>
-          <div className="value">{bundle?.rows.length || 0}</div>
-        </div>
-      </section>
+      {tab !== "board" && (
+        <section className="stats">
+          <div className="stat">
+            <div className="label">状态</div>
+            <div className="value">{status}</div>
+          </div>
+          <div className="stat">
+            <div className="label">技术候选</div>
+            <div className="value">{counts["技术候选"] || 0}</div>
+          </div>
+          <div className="stat">
+            <div className="label">观察</div>
+            <div className="value">{counts["观察"] || 0}</div>
+          </div>
+          <div className="stat">
+            <div className="label">不追涨</div>
+            <div className="value">{counts["不追涨"] || 0}</div>
+          </div>
+          <div className="stat">
+            <div className="label">暂缓</div>
+            <div className="value">{counts["暂缓"] || 0}</div>
+          </div>
+          <div className="stat">
+            <div className="label">明细行数</div>
+            <div className="value">{bundle?.rows.length || 0}</div>
+          </div>
+        </section>
+      )}
 
       {(busy || logs.length > 0) && (
         <div style={{ padding: "0 18px 10px" }}>
@@ -179,6 +261,8 @@ export default function App() {
 
       <main className="main">
         {!bundle && <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>}
+
+        {bundle && tab === "board" && <DashboardBoard bundle={bundle} />}
 
         {bundle && tab === "delivery" && (
           <div className="panel">
@@ -441,6 +525,16 @@ export default function App() {
                   </option>
                 ))}
               </select>
+              <select
+                value={filters.mom20Ma28}
+                onChange={(e) => setFilter("mom20Ma28", e.target.value)}
+              >
+                {MOM20_MA28.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "全部" ? "动量轮动：全部" : `动量轮动：${s}`}
+                  </option>
+                ))}
+              </select>
               <select value={filters.etf} onChange={(e) => setFilter("etf", e.target.value)}>
                 <option value="全部">ETF：全部</option>
                 {filterOptions.etfs.map((e) => (
@@ -521,6 +615,7 @@ export default function App() {
                 <thead>
                   <tr>
                     <th>状态</th>
+                    <th title="20日涨幅第1且站上MA28买入；掉出前3或跌破MA28换仓">动量轮动</th>
                     <th>代码</th>
                     <th>名称</th>
                     <th>板块</th>
@@ -538,6 +633,9 @@ export default function App() {
                     <th>周均线</th>
                     <th>量价</th>
                     <th className="num">情绪</th>
+                    <th className="num" title="份额变化×收盘价，单位：亿元">
+                      当日流入亿
+                    </th>
                     <th className="num">5日流入亿</th>
                     <th>日线参考</th>
                   </tr>
@@ -547,6 +645,18 @@ export default function App() {
                     <tr key={r.code}>
                       <td>
                         <span className={`pill ${actionTone(r.action)}`}>{r.action}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`pill ${momTone(r.mom20Ma28 || "—")}`}
+                          title={
+                            r.ret20Rank != null
+                              ? `20日排名#${r.ret20Rank}${r.aboveMa28 ? " · 站上MA28" : " · 跌破MA28"}`
+                              : undefined
+                          }
+                        >
+                          {r.mom20Ma28 || "—"}
+                        </span>
                       </td>
                       <td>{r.code}</td>
                       <td>{r.name}</td>
@@ -565,6 +675,7 @@ export default function App() {
                       <td>{r.weeklyMa}</td>
                       <td>{r.volumePrice}</td>
                       <td className="num">{fmtNum(r.sentiment, 1)}</td>
+                      <td className={pctClass(r.flow1)}>{fmtNum(r.flow1, 2)}</td>
                       <td className={pctClass(r.flow5)}>{fmtNum(r.flow5, 2)}</td>
                       <td>{r.kdjMacdRef}</td>
                     </tr>

@@ -96,6 +96,9 @@ class ReportGeneratorTests(unittest.TestCase):
         self.assertIn("[官方机构｜2026-07-20｜证据标题]", row["policy_reason"])
         self.assertIn("MA20", row["technical_reason"])
         self.assertIn("份额净流入", row["sentiment_reason"])
+        self.assertIn(row["mom20Ma28"], {"买入", "持有", "换仓", "—"})
+        self.assertIn("mom20_ma28_framework", report)
+        self.assertEqual(1, row["ret20_rank"])
 
     def test_share_source_error_is_scoped_to_one_etf_and_each_window(self) -> None:
         bars = _bars()
@@ -122,7 +125,7 @@ class ReportGeneratorTests(unittest.TestCase):
         )
 
         row = report["rows"][0]
-        for window in ("5", "10", "20"):
+        for window in ("1", "5", "10", "20"):
             self.assertIsNone(row["flows"][window]["value_cny"])
             self.assertEqual("share_source_unavailable", row["flows"][window]["reason"])
         self.assertIn("flow_5d", row["sentiment"]["missing_inputs"])

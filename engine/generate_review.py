@@ -87,7 +87,7 @@ def main() -> int:
             row["flows"][str(window)]["value_cny"] is not None
             for row in report["rows"]
         )
-        for window in (5, 10, 20)
+        for window in (1, 5, 10, 20)
     }
     print(
         json.dumps(

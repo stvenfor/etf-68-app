@@ -56,18 +56,18 @@ class LongHistoryProvider(PublicMarketDataProvider):
         f"&lmt={BAR_LIMIT}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
     )
     TENCENT_BARS = (
-        "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?"
+        "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?"
         f"param={{symbol}},day,,,{BAR_LIMIT},qfq"
     )
 
     def get_daily_bars(self, code: str) -> Sequence[DailyBar]:
         fetched_at = self.clock()
         try:
-            payload = self._json(self.EASTMONEY_BARS.format(secid=_secid(code)))
-            return parse_eastmoney_bars(payload, fetched_at)
-        except MarketDataError:
             payload = self._json(self.TENCENT_BARS.format(symbol=_tencent_symbol(code)))
             return parse_tencent_bars(payload, code, fetched_at)
+        except MarketDataError:
+            payload = self._json(self.EASTMONEY_BARS.format(secid=_secid(code)))
+            return parse_eastmoney_bars(payload, fetched_at)
 
 
 def _fmt_stat(st: ConditionStats) -> str:

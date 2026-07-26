@@ -49,7 +49,7 @@ INDEX_TENCENT = {
 def fetch_index_closes(symbol: str, start: date, end: date) -> dict[date, float]:
     """Fetch daily closes via Tencent (Eastmoney often drops connections)."""
     param = f"{symbol},day,{start.isoformat()},{end.isoformat()},800,qfq"
-    url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={param}"
+    url = f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={param}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     last_err: Exception | None = None
     for attempt in range(4):

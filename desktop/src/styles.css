@@ -8,6 +8,9 @@
   --accent: #3d9cf0;
   --good: #3ecf8e;
   --bad: #f07178;
+  /* A-share quote colors: 涨红跌绿 */
+  --up: #f07178;
+  --down: #3ecf8e;
   --warn: #e6b450;
   --font: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
   --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
@@ -207,10 +210,10 @@ th.num {
 }
 
 .pos {
-  color: var(--good);
+  color: var(--up);
 }
 .neg {
-  color: var(--bad);
+  color: var(--down);
 }
 
 .pill {
@@ -256,5 +259,214 @@ th.num {
 @media (max-width: 1100px) {
   .stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* —— Light finance large-screen board —— */
+.app.is-board {
+  --bg: #e8eef5;
+  --panel: #ffffff;
+  --panel-2: #f4f8fc;
+  --border: #d5e0eb;
+  --text: #1a2b3c;
+  --muted: #6b7c8f;
+  --accent: #1f7aaf;
+  --good: #0d9f6e;
+  --bad: #d64545;
+  --up: #d64545;
+  --down: #0d9f6e;
+  --warn: #c9872a;
+}
+
+html:has(.app.is-board),
+body:has(.app.is-board),
+#root:has(.app.is-board) {
+  background: linear-gradient(165deg, #f5f8fc 0%, #e4edf6 48%, #dfeaf4 100%);
+}
+
+.app.is-board .topbar {
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom-color: var(--border);
+}
+
+.app.is-board .btn {
+  background: #fff;
+  color: var(--text);
+}
+
+.app.is-board .btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.app.is-board .tab {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.app.is-board .tab.active {
+  background: #fff;
+  color: var(--accent);
+  border-color: #b7d0e4;
+  box-shadow: 0 1px 0 rgba(31, 122, 175, 0.08);
+}
+
+.app.is-board .main {
+  padding-bottom: 28px;
+}
+
+.app.is-board .logs {
+  background: #f0f5fa;
+  color: var(--muted);
+}
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.board-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px 2px;
+}
+
+.board-kicker {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.board-title {
+  margin: 4px 0 0;
+  font-size: 28px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.board-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.board-stamp {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.board-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.board-kpi {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(26, 43, 60, 0.04);
+}
+
+.board-kpi-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.board-kpi-value {
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.board-kpi.good .board-kpi-value {
+  color: var(--good);
+}
+.board-kpi.warn .board-kpi-value {
+  color: var(--warn);
+}
+.board-kpi.bad .board-kpi-value {
+  color: var(--bad);
+}
+.board-kpi.up .board-kpi-value {
+  color: var(--up);
+}
+.board-kpi.down .board-kpi-value {
+  color: var(--down);
+}
+
+.board-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.board-row-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.board-row-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.board-row-1 {
+  grid-template-columns: 1fr;
+}
+
+.board-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px 8px;
+  box-shadow: 0 10px 28px rgba(26, 43, 60, 0.045);
+  min-width: 0;
+}
+
+.board-card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 680;
+  color: var(--text);
+}
+
+.board-card-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.board-card-body {
+  margin-top: 4px;
+}
+
+.board-empty {
+  height: 280px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 1280px) {
+  .board-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .board-row-3 {
+    grid-template-columns: 1fr;
+  }
+  .board-row-2 {
+    grid-template-columns: 1fr;
+  }
+  .board-title {
+    font-size: 22px;
   }
 }

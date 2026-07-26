@@ -13,9 +13,12 @@
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.yml",
     "engine:check": "cd engine && python3.12 cli_app.py check-python",
     "engine:assemble": "cd engine && python3.12 cli_app.py assemble",
-    "engine:generate": "cd engine && python3.12 cli_app.py generate"
+    "engine:generate": "cd engine && python3.12 cli_app.py generate",
+    "engine:tts-deps": "python3.12 -m pip install -r engine/requirements.txt"
   },
   "dependencies": {
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

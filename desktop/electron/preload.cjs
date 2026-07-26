@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("etf68", {
   loadLatest: () => ipcRenderer.invoke("load-latest"),
   generateDaily: (payload) => ipcRenderer.invoke("generate-daily", payload || {}),
   assembleLatest: (payload) => ipcRenderer.invoke("assemble-latest", payload || {}),
+  speakText: (payload) => ipcRenderer.invoke("speak-text", payload || {}),
   onGenerateLog: (cb) => {
     const handler = (_e, line) => cb(line);
     ipcRenderer.on("generate-log", handler);

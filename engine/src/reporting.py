@@ -128,7 +128,7 @@ def calculate_share_flows(
     points: Sequence[SharePoint],
     bars: Sequence[DailyBar],
     *,
-    windows: Sequence[int] = (5, 10, 20),
+    windows: Sequence[int] = (1, 5, 10, 20),
     split_factors: Optional[Mapping[date, float]] = None,
 ) -> dict[int, FlowWindow]:
     _validate_bars(bars)
@@ -287,8 +287,8 @@ def render_report_markdown(report: Mapping[str, Any]) -> str:
         f"- 状态概览：技术候选 {counts['技术候选']} 只、观察 {counts['观察']} 只、不追涨 {counts['不追涨']} 只、暂缓 {counts['暂缓']} 只。",
         "- 当前结论：本表尚未完成24小时内双来源催化、实时溢折价和相对基准强度复核，因此不输出买入指令。",
         "",
-        "| 状态 | 代码 | 名称 | 趋势 | 5日 | 10日 | 20日 | RSI14 | KDJ | MACD | 情绪 | 净流入截至 | 5日份额净流入 | 10日份额净流入 | 20日份额净流入 | 政策面 | 基本面 | 技术面 | 情绪面 |",
-        "|---|---|---|---|---:|---:|---:|---:|---|---|---|---|---:|---:|---:|---|---|---|---|",
+        "| 状态 | 动量轮动 | 代码 | 名称 | 趋势 | 5日 | 10日 | 20日 | RSI14 | KDJ | MACD | 情绪 | 净流入截至 | 当日份额净流入 | 5日份额净流入 | 10日份额净流入 | 20日份额净流入 | 政策面 | 基本面 | 技术面 | 情绪面 |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---|---|---|---|---:|---:|---:|---:|---|---|---|---|",
     ]
     for row in rows:
         kdj = _mapping(row.get("kdj"))
@@ -297,6 +297,7 @@ def render_report_markdown(report: Mapping[str, Any]) -> str:
         flows = _mapping(row.get("flows"))
         values = [
             row.get("action", ""),
+            row.get("mom20Ma28", "—"),
             row.get("code", ""),
             row.get("name", ""),
             row.get("trend", ""),
@@ -308,6 +309,7 @@ def render_report_markdown(report: Mapping[str, Any]) -> str:
             f"DIF {_format_number(macd.get('dif'), 4)} / DEA {_format_number(macd.get('dea'), 4)} / 柱 {_format_number(macd.get('histogram'), 4)}（{macd.get('state', 'N/A')}）",
             f"{_format_number(sentiment.get('score'), 1)}（{sentiment.get('label', 'N/A')}）",
             row.get("flow_as_of") or "N/A",
+            _format_flow(_mapping(flows.get("1"))),
             _format_flow(_mapping(flows.get("5"))),
             _format_flow(_mapping(flows.get("10"))),
             _format_flow(_mapping(flows.get("20"))),
@@ -322,7 +324,7 @@ def render_report_markdown(report: Mapping[str, Any]) -> str:
             "",
             "## 数据说明",
             "",
-            "- 5/10/20日净流入为交易所披露基金份额的相邻交易日变化乘以当日收盘价后求和；这是份额申赎资金的估算，不等同于二级市场主动买卖资金。",
+            "- 当日/5/10/20日净流入为交易所披露基金份额的相邻交易日变化乘以当日收盘价后求和；这是份额申赎资金的估算，不等同于二级市场主动买卖资金。",
             "- 单个窗口缺少份额日期或存在无法解释的基金份额折算时，仅该窗口显示 N/A，不以 0 代替，也不扩大为全表错误。",
             "- KDJ 参数为 9，MACD 参数为 12/26/9；情绪分数会对缺失分项重新归一化权重。技术候选只是进入后续催化、溢价和相对强度复核，不等同于买入信号。",
             "",
@@ -341,9 +343,12 @@ def render_report_csv(report: Mapping[str, Any]) -> str:
     """Render a flat, machine-readable companion CSV."""
 
     headers = [
-        "状态", "代码", "名称", "趋势", "5日涨跌幅_%", "10日涨跌幅_%", "20日涨跌幅_%",
+        "状态", "动量轮动", "20日排名", "站上MA28", "代码", "名称", "趋势",
+        "5日涨跌幅_%", "10日涨跌幅_%", "20日涨跌幅_%",
         "RSI14", "K", "D", "J", "KDJ状态", "DIF", "DEA", "MACD柱", "MACD状态",
-        "情绪分数", "情绪标签", "情绪缺失项", "净流入截至", "5日份额净流入_元", "5日净流入错误",
+        "情绪分数", "情绪标签", "情绪缺失项", "净流入截至",
+        "当日份额净流入_元", "当日净流入错误",
+        "5日份额净流入_元", "5日净流入错误",
         "10日份额净流入_元", "10日净流入错误", "20日份额净流入_元", "20日净流入错误",
         "政策面理由", "基本面理由", "技术面理由", "情绪面理由",
     ]
@@ -355,12 +360,16 @@ def render_report_csv(report: Mapping[str, Any]) -> str:
         macd = _mapping(row.get("macd"))
         sentiment = _mapping(row.get("sentiment"))
         flows = _mapping(row.get("flows"))
+        flow1 = _mapping(flows.get("1"))
         flow5 = _mapping(flows.get("5"))
         flow10 = _mapping(flows.get("10"))
         flow20 = _mapping(flows.get("20"))
         writer.writerow(
             {
                 "状态": row.get("action", ""),
+                "动量轮动": row.get("mom20Ma28", "—"),
+                "20日排名": row.get("ret20_rank") if row.get("ret20_rank") is not None else "",
+                "站上MA28": "Y" if row.get("above_ma28") else "N",
                 "代码": row.get("code", ""),
                 "名称": row.get("name", ""),
                 "趋势": row.get("trend", ""),
@@ -380,6 +389,8 @@ def render_report_csv(report: Mapping[str, Any]) -> str:
                 "情绪标签": sentiment.get("label", ""),
                 "情绪缺失项": ";".join(sentiment.get("missing_inputs", [])),
                 "净流入截至": row.get("flow_as_of") or "",
+                "当日份额净流入_元": _csv_number(flow1.get("value_cny"), 2),
+                "当日净流入错误": flow1.get("reason") or "",
                 "5日份额净流入_元": _csv_number(flow5.get("value_cny"), 2),
                 "5日净流入错误": flow5.get("reason") or "",
                 "10日份额净流入_元": _csv_number(flow10.get("value_cny"), 2),
