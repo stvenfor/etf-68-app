@@ -1,0 +1,165 @@
+# ETF-68 参考：目录、CLI、数据与环境
+
+## 环境
+
+| 项 | 要求 |
+|----|------|
+| OS | macOS |
+| Node | 20+ |
+| Python | **3.12**（`python3.12` 在 PATH） |
+| TTS | `edge-tts`（`npm run engine:tts-deps`） |
+
+可选环境变量：
+
+| 变量 | 作用 |
+|------|------|
+| `ETF68_OUT_DIR` | UI 产物目录（默认 `data/out`） |
+| `ETF68_REPORTS_DIR` | reports 目录（默认 `engine/reports`） |
+| `ETF68_TTS_CACHE` | TTS 缓存目录 |
+| `ETF68_TTS_VOICE` | 默认 `zh-CN-XiaoxiaoNeural` |
+| `ETF68_TTS_RATE` | 语速，如 `-8%` / `+0%` |
+| `ETF68_TTS_PITCH` | 音调，如 `+0Hz` |
+
+## 目录地图
+
+```
+etf-68-app/
+├── desktop/
+│   ├── electron/main.cjs      # 主进程；generate / speak-text IPC
+│   ├── electron/preload.cjs
+│   └── src/
+│       ├── App.tsx            # 筛选、生成今日、日更播报
+│       ├── narration.ts       # 应用内短播报文案
+│       ├── filters.ts
+│       ├── types.ts           # UiBundle / EtfRow / window.etf68
+│       └── dashboard/         # ECharts 看板
+├── engine/
+│   ├── cli_app.py             # 统一 CLI 入口
+│   ├── generate_review.py
+│   ├── analyze_edge_conditions.py
+│   ├── backtest_*.py
+│   ├── build_substantive_impact_events.py
+│   ├── build_event_etf_impact_matrix.py
+│   ├── requirements.txt       # edge-tts
+│   ├── reports/               # 日更中间 JSON/MD/CSV
+│   ├── src/
+│   │   ├── review_script.py   # 市场复盘章节脚本
+│   │   ├── tts_edge.py
+│   │   ├── market_data.py
+│   │   └── …
+│   └── tests/
+├── data/out/                  # latest.json、bundle-*.json、tts-cache/
+├── electron-builder.yml
+└── package.json
+```
+
+## npm scripts
+
+| Script | 作用 |
+|--------|------|
+| `npm run dev` | Vite + Electron 开发 |
+| `npm run build` | 仅前端构建 |
+| `npm run dist:mac` | macOS 安装包 → `release/` |
+| `npm run engine:check` | `cli_app.py check-python` |
+| `npm run engine:assemble` | 离线组装 bundle |
+| `npm run engine:generate` | 完整日更管线 |
+| `npm run engine:tts-deps` | 安装 Python TTS 依赖 |
+
+## CLI（`engine/cli_app.py`）
+
+一律在 `engine/` 下用 `python3.12 cli_app.py <cmd>`。stdout 多为 JSON。
+
+### `generate`
+
+完整日更：技术面 → 边缘条件 → 周/日回测 → 实质事件 → 事件矩阵 → `assemble_ui_bundle`。
+
+```bash
+python3.12 cli_app.py generate [--date YYYY-MM-DD] [--seed PATH] [--workers 6]
+```
+
+种子：优先 `representative-technical-review-{prev|day}.json`。
+
+### `assemble`
+
+不联网，从已有 `engine/reports/` 拼 `data/out/latest.json` + `bundle-{day}.json`。
+
+```bash
+python3.12 cli_app.py assemble [--date YYYY-MM-DD]
+```
+
+无 `--date` 时取最新 `representative-technical-review-*.json`。
+
+### `load-latest`
+
+打印 `data/out/latest.json` 包装结果。
+
+### `check-python`
+
+返回 `ok`、`python`、`ttsOk`、`ttsError`、`engineRoot`。
+
+### `tts`
+
+Edge TTS 合成；命中缓存则直接返回。
+
+```bash
+python3.12 cli_app.py tts --text "……" [--output PATH] [--voice …] [--rate …] [--pitch …] [--force]
+```
+
+### `review-script`
+
+从 UiBundle 生成复盘章节 JSON（口播 + bullets + 结构化字段）。
+
+```bash
+python3.12 cli_app.py review-script [--date YYYY-MM-DD] [--bundle PATH] [--output PATH]
+```
+
+- 有 `--date`：先 assemble 再脚本化  
+- 否则读 `--bundle` 或 `latest.json`
+
+章节与软预算（秒，**仅提示，不硬裁 VO**）见 `engine/src/review_script.py` 的 `CHAPTER_BUDGETS`。
+
+## UiBundle 要点
+
+`data/out/latest.json` 主要字段（以代码为准）：
+
+- `dataDate`、`breadthPct`（上涨占比）
+- `rows[]`：`code` / `name` / `sector` / `ret1` / `ret5` / `flow1` / `flow5` / `action` 等
+- `counts.byAction`：技术候选 / 观察 / 不追涨 / 暂缓…
+- `citicMonthly`：中信多空按月日明细（`citicTotal`）
+- 实质利好利空、事件矩阵等附属块（供复盘 news / 看板）
+
+技术候选筛选：`action === "技术候选"`；复盘默认按 `ret1` 取前 5。
+
+## 日更流水线步骤
+
+`cmd_generate` 顺序：
+
+1. `generate_review.py` → `representative-technical-review-{day}.{json,md,csv}`
+2. `analyze_edge_conditions.py` → `etf68-edge-conditions-{day}.json`
+3. `backtest_weekly_macd_ma.py` → weekly JSON（并写回 review）
+4. `backtest_daily_kdj_macd.py` → KDJ/MACD JSON
+5. `build_substantive_impact_events.py` → 实质利好利空
+6. `build_event_etf_impact_matrix.py` → 事件×ETF 矩阵
+7. `assemble_ui_bundle` → `latest.json`
+
+子进程经 `_clear_proxy_env()`：去掉常见代理变量，设 `NO_PROXY=*`、`PYTHONPATH=engine`。
+
+## Electron IPC（摘要）
+
+- 生成日更：主进程调 `cli_app.py generate`
+- `speakText`：主进程调 `cli_app.py tts`，音频 base64 回渲染进程
+- 打包后引擎可写目录在用户侧 `out/` / `reports/`；首次启动可从包内种子拷贝静态数据
+
+## 测试
+
+```bash
+cd engine && python3.12 -m pytest tests/ -q
+```
+
+与 TTS / 复盘相关：`tests/test_tts_edge.py`、`tests/test_review_script.py`。
+
+## 上游与限制
+
+- 引擎源自 `my_tool_project/modules/etf-monitor`
+- 交割日长短期回测依赖 `cffex-daily`，本仓库 V1 未接入
+- 飞书 / 下单不在范围

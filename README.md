@@ -2,6 +2,8 @@
 
 本地一键生成 68 只代表池 ETF 日更技术面，并在桌面窗口里筛选查看（交割日历 / 中信多空 / 事件矩阵 / 实质利好利空 / 明细表）。
 
+Agent / 详细用法见 [`.cursor/skills/etf-68-app/`](.cursor/skills/etf-68-app/)（含 Edge TTS、复盘 MP4、OpenCut 流程）。
+
 ## 环境
 
 - macOS + Node 20+
