@@ -97,7 +97,20 @@ class ReportGeneratorTests(unittest.TestCase):
         self.assertIn("MA20", row["technical_reason"])
         self.assertIn("份额净流入", row["sentiment_reason"])
         self.assertIn(row["mom20Ma28"], {"买入", "持有", "换仓", "—"})
+        self.assertIn(
+            row["wmDailySignal"],
+            {"做多信号", "等日线", "日线过热", "方向未齐", "不做多"},
+        )
+        self.assertIn(
+            row["maMacdVol"],
+            {"可买入", "等量能", "量能存疑", "等买点", "方向未齐", "暂缓"},
+        )
+        self.assertIn("maMacdVolDetail", row)
+        self.assertIn("monthlyTrend", row)
         self.assertIn("mom20_ma28_framework", report)
+        self.assertIn("ma_macd_vol_framework", report)
+        self.assertIn("trend_score_card", report)
+        self.assertIn("total", report["trend_score_card"])
         self.assertEqual(1, row["ret20_rank"])
 
     def test_share_source_error_is_scoped_to_one_etf_and_each_window(self) -> None:

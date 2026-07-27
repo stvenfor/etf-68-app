@@ -1,17 +1,19 @@
 import { useMemo, type ReactNode } from "react";
 import ReactECharts from "echarts-for-react";
-import type { UiBundle } from "../types";
+import type { TrendScoreCard, UiBundle } from "../types";
 import { fmtNum } from "../filters";
 import {
   actionDonutOption,
-  breadthGaugeOption,
   citicLineOption,
   deliveryBarOption,
-  heatmapOption,
   moversBarOption,
   sectorHeatOption,
+  sectorTreemapOption,
   trendBarOption,
+  trendScoreGaugeOption,
+  trendScoreRadarOption,
 } from "./chartOptions";
+import TemperatureRing from "./TemperatureRing";
 
 type Props = {
   bundle: UiBundle;
@@ -19,24 +21,27 @@ type Props = {
 
 export default function DashboardBoard({ bundle }: Props) {
   const byAction = bundle.counts?.byAction || {};
-  const byTrend = bundle.counts?.byTrend || {};
+  const scoreCard = bundle.trendScoreCard;
 
   const opts = useMemo(
     () => ({
-      gauge: breadthGaugeOption(bundle.breadthPct),
       action: actionDonutOption(bundle.counts?.byAction || {}),
       trend: trendBarOption(bundle.counts?.byTrend || {}),
       sector: sectorHeatOption(bundle.rows),
       movers: moversBarOption(bundle.rows),
-      heat: heatmapOption(bundle.rows),
+      treemap: sectorTreemapOption(bundle.rows),
       citic: citicLineOption(bundle),
       delivery: deliveryBarOption(bundle),
+      scoreGauge: scoreCard
+        ? trendScoreGaugeOption(scoreCard.total, scoreCard.rating)
+        : null,
+      scoreRadar: scoreCard ? trendScoreRadarOption(scoreCard.dimensions) : null,
     }),
-    [bundle]
+    [bundle, scoreCard]
   );
 
   const kpis = [
-    { label: "市场宽度", value: `${fmtNum(bundle.breadthPct, 1)}%`, tone: toneByBreadth(bundle.breadthPct) },
+    { label: "市场温度", value: `${fmtNum(bundle.breadthPct, 1)}%`, tone: toneByBreadth(bundle.breadthPct) },
     { label: "技术候选", value: String(byAction["技术候选"] || 0), tone: "good" },
     { label: "观察", value: String(byAction["观察"] || 0), tone: "warn" },
     { label: "不追涨", value: String(byAction["不追涨"] || 0), tone: "bad" },
@@ -51,7 +56,7 @@ export default function DashboardBoard({ bundle }: Props) {
           <div className="board-kicker">ETF-68 · 数据看板</div>
           <h2 className="board-title">{bundle.dataDate} 市场复盘大屏</h2>
           <p className="board-sub">
-            宽度、行动分布、板块涨跌与中信多空一屏总览
+            温度、行动分布、板块涨跌与中信多空一屏总览
             {bundle.ret30Entry ? ` · 30日锚点 ${bundle.ret30Entry}` : ""}
           </p>
         </div>
@@ -67,9 +72,11 @@ export default function DashboardBoard({ bundle }: Props) {
         ))}
       </div>
 
+      {scoreCard ? <TrendScoreModule card={scoreCard} gaugeOpt={opts.scoreGauge} radarOpt={opts.scoreRadar} /> : null}
+
       <div className="board-grid board-row-3">
-        <ChartCard title="市场宽度" subtitle="上涨占比温度计">
-          <ReactECharts option={opts.gauge} style={{ height: 240 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
+        <ChartCard title="市场温度" subtitle="均线 · 涨跌 · 资金综合热度">
+          <TemperatureRing value={bundle.breadthPct} />
         </ChartCard>
         <ChartCard title="行动分布" subtitle="技术候选 / 观察 / 不追涨 / 暂缓">
           <ReactECharts option={opts.action} style={{ height: 240 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
@@ -89,10 +96,10 @@ export default function DashboardBoard({ bundle }: Props) {
       </div>
 
       <div className="board-grid board-row-1">
-        <ChartCard title="板块 × ETF 涨跌热力" subtitle="按板块分行，颜色映射当日涨跌">
+        <ChartCard title="板块涨跌分布" subtitle="面积=|均涨跌%| · 红涨绿跌">
           <ReactECharts
-            option={opts.heat}
-            style={{ height: Math.max(280, Math.min(520, new Set(bundle.rows.map((r) => r.sector)).size * 28 + 80)) }}
+            option={opts.treemap}
+            style={{ height: 460 }}
             opts={{ renderer: "canvas" }}
             notMerge
             lazyUpdate
@@ -101,14 +108,14 @@ export default function DashboardBoard({ bundle }: Props) {
       </div>
 
       <div className="board-grid board-row-2">
-        <ChartCard title="中信期货净持仓" subtitle="月内逐日合计">
+        <ChartCard title="中信期货净持仓" subtitle="日净持仓（手）· 同步上证/深证/创业板/科创板涨跌%">
           {opts.citic ? (
-            <ReactECharts option={opts.citic} style={{ height: 280 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
+            <ReactECharts option={opts.citic} style={{ height: 320 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
           ) : (
             <div className="board-empty">暂无中信月度数据</div>
           )}
         </ChartCard>
-        <ChartCard title="交割日股指表现" subtitle="IH / IF / IC / IM">
+        <ChartCard title="交割日中信净增仓" subtitle="中信分品种净增仓（手）">
           {opts.delivery ? (
             <ReactECharts option={opts.delivery} style={{ height: 280 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
           ) : (
@@ -117,6 +124,60 @@ export default function DashboardBoard({ bundle }: Props) {
         </ChartCard>
       </div>
     </div>
+  );
+}
+
+function TrendScoreModule({
+  card,
+  gaugeOpt,
+  radarOpt,
+}: {
+  card: TrendScoreCard;
+  gaugeOpt: object | null;
+  radarOpt: object | null;
+}) {
+  return (
+    <section className="board-card board-score">
+      <header className="board-card-head">
+        <h3>模块5 · 多维度趋势评分卡</h3>
+        <p>周线25% · 月线25% · 日线动能20% · 资金面15% · 估值面15%</p>
+      </header>
+      <div className="board-score-body">
+        <div className="board-score-main">
+          {gaugeOpt ? (
+            <ReactECharts option={gaugeOpt} style={{ height: 220 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
+          ) : null}
+          <div className={`board-score-rating ${ratingTone(card.rating)}`}>{card.rating}</div>
+          <p className="board-score-advice">{card.advice}</p>
+        </div>
+        <div className="board-score-radar">
+          {radarOpt ? (
+            <ReactECharts option={radarOpt} style={{ height: 280 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
+          ) : null}
+        </div>
+        <div className="board-score-dims">
+          {card.dimensions.map((d) => (
+            <div key={d.key} className="board-score-dim" title={d.note || undefined}>
+              <div className="board-score-dim-top">
+                <span>{d.label}</span>
+                <span className="board-score-dim-meta">
+                  权重 {Math.round(d.weight * 100)}% · {fmtNum(d.score, 1)}
+                </span>
+              </div>
+              <div className="board-score-bar">
+                <div
+                  className={`board-score-bar-fill ${dimTone(d.score)}`}
+                  style={{ width: `${Math.max(0, Math.min(100, d.score ?? 0))}%` }}
+                />
+              </div>
+            </div>
+          ))}
+          {card.missing?.includes("pe_pb_percentile") ? (
+            <p className="board-score-note">估值面暂用 RSI + 距MA20 拥挤度代理（低估加分）；PE/PB 历史分位待接入</p>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -144,5 +205,18 @@ function toneByBreadth(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "";
   if (v >= 60) return "up";
   if (v >= 40) return "warn";
+  return "down";
+}
+
+function ratingTone(rating: string): string {
+  if (rating === "强烈看涨" || rating === "看涨") return "up";
+  if (rating === "中性") return "warn";
+  return "down";
+}
+
+function dimTone(score: number | null | undefined): string {
+  if (score == null || Number.isNaN(score)) return "";
+  if (score >= 60) return "up";
+  if (score >= 40) return "warn";
   return "down";
 }

@@ -15,6 +15,9 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+from .fund_advice import FRAMEWORK as ADVICE_FRAMEWORK
+from .fund_advice import apply_fund_advice
+
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 QUOTA: dict[str, int] = {
@@ -26,14 +29,16 @@ QUOTA: dict[str, int] = {
 
 # Always keep these codes on rebuild. Missing from Sina list → stub, NAV later.
 # Equity: tech themes — 半导体 / 芯片 / CPO(通信设备代理) / 机器人（场外无纯 CPO 开放式）。
+# Hybrid: 综合性医疗主题用主动「医疗保健」基金，不用 ETF/联接。
 FORCE_INCLUDE: dict[str, tuple[str, ...]] = {
     "equity": ("014855", "014193", "020899", "020256"),
-    "hybrid": ("001638", "001123", "001423", "001407", "009690"),
+    "hybrid": ("001638", "001123", "001423", "001407", "009690", "110023"),
 }
 
 # Drop from any category on rebuild (user removals from hybrid).
+# 003095/003096 = 中欧医疗健康 A/C（改盯易方达医疗保健行业混合 110023）。
 FORCE_EXCLUDE: frozenset[str] = frozenset(
-    {"163406", "007119", "003095", "002910", "008989", "005827"}
+    {"163406", "007119", "003095", "003096", "002910", "008989", "005827", "009881"}
 )
 
 CATEGORY_LABELS: dict[str, str] = {
@@ -386,16 +391,21 @@ def fetch_sina_estimates(
 
 
 def _apply_published_as_estimate(item: dict[str, Any]) -> None:
-    """When no usable intraday valuation, mirror published NAV day-change."""
+    """When no usable intraday valuation, mirror published NAV day-change.
+
+    Stamp estimateTime with the refresh clock so UI「估值时间」reflects this pull,
+    while still marking that the value is published NAV (not live estimate).
+    """
     if item.get("nav") is None:
         return
     item["estimateNav"] = item.get("nav")
     item["estimateChangePct"] = item.get("dayChangePct")
     item["estimateChange"] = None
+    now = datetime.now(SHANGHAI).strftime("%Y-%m-%d %H:%M:%S")
     if item.get("navDate"):
-        item["estimateTime"] = f"{item['navDate']} 已公布"
+        item["estimateTime"] = f"{now} · 净值日{item['navDate']}已公布"
     else:
-        item["estimateTime"] = "已公布·无盘中估值"
+        item["estimateTime"] = f"{now} · 已公布·无盘中估值"
 
 
 def enrich_nav(
@@ -492,18 +502,23 @@ def build_funds_top30(
     else:
         universe = load_cached_universe(previous)
 
-    valued = enrich_nav(universe, fetch=fetch)
+    valued = apply_fund_advice(enrich_nav(universe, fetch=fetch))
     counts = {k: 0 for k in QUOTA}
+    advice_counts: dict[str, int] = {}
     for row in valued:
         cat = str(row.get("category") or "")
         if cat in counts:
             counts[cat] += 1
+        label = str(row.get("advice") or "观望")
+        advice_counts[label] = advice_counts.get(label, 0) + 1
 
     return {
         "ok": True,
         "asOf": datetime.now(SHANGHAI).isoformat(timespec="seconds"),
         "quota": dict(QUOTA),
         "counts": counts,
+        "adviceCounts": advice_counts,
+        "adviceFramework": ADVICE_FRAMEWORK,
         "source": {
             "universe": "sina_fund_center",
             "nav": "eastmoney_pingzhong",

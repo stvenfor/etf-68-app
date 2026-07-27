@@ -250,6 +250,34 @@ ipcMain.handle("refresh-funds-top30", async (_event, payload = {}) => {
   }
 });
 
+ipcMain.handle("load-my-holdings", async () => {
+  const file = path.join(outDir(), "my-holdings.json");
+  if (!fs.existsSync(file)) {
+    return { ok: false, error: "no_my_holdings" };
+  }
+  try {
+    return { ok: true, bundle: JSON.parse(fs.readFileSync(file, "utf8")) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("refresh-my-holdings", async () => {
+  try {
+    const { stdout } = await runPython(["cli_app.py", "my-holdings"]);
+    const line = stdout.trim().split(/\r?\n/).pop();
+    const parsed = JSON.parse(line);
+    if (!parsed.ok) return parsed;
+    const file = path.join(outDir(), "my-holdings.json");
+    if (!fs.existsSync(file)) {
+      return { ok: false, error: "my_holdings_missing_after_refresh" };
+    }
+    return { ok: true, bundle: JSON.parse(fs.readFileSync(file, "utf8")) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
 ipcMain.handle("speak-text", async (_event, payload = {}) => {
   const text = String(payload.text || "").trim();
   if (!text) return { ok: false, error: "empty_text" };

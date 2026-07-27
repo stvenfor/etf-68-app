@@ -20,7 +20,9 @@
       "ihPct": -0.83,
       "ifPct": -0.41,
       "icPct": 0.11,
-      "imPct": -0.1
+      "imPct": -0.1,
+      "grandTotal": -7864,
+      "otherTotal": -5563
     },
     {
       "month": 2,
@@ -41,7 +43,9 @@
       "ihPct": 0.23,
       "ifPct": 1.01,
       "icPct": 1.12,
-      "imPct": 1.16
+      "imPct": 1.16,
+      "grandTotal": -10449,
+      "otherTotal": -8886
     },
     {
       "month": 3,
@@ -62,7 +66,9 @@
       "ihPct": -1.11,
       "ifPct": -0.35,
       "icPct": -1.49,
-      "imPct": -1.59
+      "imPct": -1.59,
+      "grandTotal": -13244,
+      "otherTotal": -6918
     },
     {
       "month": 4,
@@ -83,7 +89,9 @@
       "ihPct": -0.98,
       "ifPct": -0.17,
       "icPct": 0.42,
-      "imPct": 0.9
+      "imPct": 0.9,
+      "grandTotal": 2139,
+      "otherTotal": 230
     },
     {
       "month": 5,
@@ -104,7 +112,9 @@
       "ihPct": -1.3,
       "ifPct": -1.12,
       "icPct": -1.54,
-      "imPct": -1.09
+      "imPct": -1.09,
+      "grandTotal": 687,
+      "otherTotal": 1585
     },
     {
       "month": 6,
@@ -125,7 +135,9 @@
       "ihPct": 2.86,
       "ifPct": 2.39,
       "icPct": 2.26,
-      "imPct": 1.08
+      "imPct": 1.08,
+      "grandTotal": -15015,
+      "otherTotal": -9605
     },
     {
       "month": 7,
@@ -146,7 +158,9 @@
       "ihPct": -2.63,
       "ifPct": -3.6,
       "icPct": -5.55,
-      "imPct": -6.08
+      "imPct": -6.08,
+      "grandTotal": -6545,
+      "otherTotal": -4941
     },
     {
       "month": 8,
@@ -167,7 +181,9 @@
       "ihPct": null,
       "ifPct": null,
       "icPct": null,
-      "imPct": null
+      "imPct": null,
+      "otherTotal": null,
+      "grandTotal": null
     },
     {
       "month": 9,
@@ -188,7 +204,9 @@
       "ihPct": null,
       "ifPct": null,
       "icPct": null,
-      "imPct": null
+      "imPct": null,
+      "otherTotal": null,
+      "grandTotal": null
     },
     {
       "month": 10,
@@ -209,7 +227,9 @@
       "ihPct": null,
       "ifPct": null,
       "icPct": null,
-      "imPct": null
+      "imPct": null,
+      "otherTotal": null,
+      "grandTotal": null
     },
     {
       "month": 11,
@@ -230,7 +250,9 @@
       "ihPct": null,
       "ifPct": null,
       "icPct": null,
-      "imPct": null
+      "imPct": null,
+      "otherTotal": null,
+      "grandTotal": null
     },
     {
       "month": 12,
@@ -251,7 +273,9 @@
       "ihPct": null,
       "ifPct": null,
       "icPct": null,
-      "imPct": null
+      "imPct": null,
+      "otherTotal": null,
+      "grandTotal": null
     }
   ]
 }

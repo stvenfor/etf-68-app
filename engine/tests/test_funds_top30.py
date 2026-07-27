@@ -51,10 +51,13 @@ class FundsTop30HelpersTest(unittest.TestCase):
             _sina_row("163406", "兴全合润混合A", 9e9, 2.0),  # excluded
             _sina_row("007119", "睿远成长价值混合A", 8e9, 2.0),  # excluded
             _sina_row("005827", "易方达蓝筹精选混合", 7e9, 2.0),  # excluded
+            _sina_row("003096", "中欧医疗健康混合C", 6.5e9, 2.0),  # excluded
+            _sina_row("009881", "广发中证医疗ETF联接C", 5e9, 2.0),  # excluded 联接
             _sina_row("001123", "鹏华弘利混合C", 1e8, 1.8),  # pinned, small AUM
+            _sina_row("110023", "易方达医疗保健行业混合", 2e8, 1.2),  # pinned comprehensive medical
             _sina_row("011452", "华泰柏瑞质量成长混合C", 6e9, 2.0),
         ]
-        picked = select_category_top(raw, "hybrid", 4)
+        picked = select_category_top(raw, "hybrid", 6)
         codes = [r["code"] for r in picked]
         for c in FORCE_EXCLUDE:
             self.assertNotIn(c, codes)
@@ -62,7 +65,10 @@ class FundsTop30HelpersTest(unittest.TestCase):
         self.assertEqual(codes[0], FORCE_INCLUDE["hybrid"][0])
         self.assertIn("001123", codes)
         self.assertIn("001423", codes)  # stub pin not in raw
-        self.assertEqual(len(picked), 4)
+        self.assertIn("110023", codes)
+        self.assertNotIn("003096", codes)
+        self.assertNotIn("009881", codes)
+        self.assertEqual(len(picked), 6)
 
     def test_equity_tech_pins(self) -> None:
         raw = [
@@ -136,6 +142,9 @@ class FundsTop30BuildTest(unittest.TestCase):
                 ("163406", "兴全合润混合A", 9e9),  # excluded
                 ("007119", "睿远成长价值混合A", 8.5e9),  # excluded
                 ("003095", "中欧医疗健康混合A", 8e9),  # excluded
+                ("003096", "中欧医疗健康混合C", 7.8e9),  # excluded
+                ("009881", "广发中证医疗ETF联接C", 7.6e9),  # excluded 联接
+                ("110023", "易方达医疗保健行业混合", 2e8),  # pinned comprehensive medical
                 ("002910", "易方达供给改革混合", 7.5e9),  # excluded
                 ("008989", "大成科技创新混合C", 7.2e9),  # excluded
                 ("019001", "测试混合补位1A", 3.9e9),
@@ -209,8 +218,13 @@ class FundsTop30BuildTest(unittest.TestCase):
             self.assertIn(c, hybrid_codes)
         for c in FORCE_EXCLUDE:
             self.assertNotIn(c, hybrid_codes)
+        self.assertIn("110023", hybrid_codes)
+        self.assertNotIn("003096", hybrid_codes)
+        self.assertNotIn("009881", hybrid_codes)
         equity_codes = [r["code"] for r in result["rows"] if r["category"] == "equity"]
         self.assertEqual(equity_codes, list(FORCE_INCLUDE["equity"]))
+        self.assertIn("adviceFramework", result)
+        self.assertTrue(result.get("adviceCounts"))
         for row in result["rows"]:
             self.assertIsNotNone(row.get("nav"))
             self.assertEqual(row.get("navDate"), "2026-07-24")
@@ -219,11 +233,13 @@ class FundsTop30BuildTest(unittest.TestCase):
             self.assertAlmostEqual(row.get("estimateChange") or 0, 0.016)  # 1.25 - 1.234
             self.assertAlmostEqual(row.get("estimateChangePct") or 0, 1.2966, places=3)
             self.assertTrue(row.get("estimateTime"))
+            self.assertIn(row.get("advice"), {"可关注", "相对友好", "观望", "不追高", "暂缓"})
+            self.assertTrue(row.get("adviceDetail"))
+            self.assertTrue(row.get("adviceRisk"))
             name_u = (row.get("name") or "").upper()
+            # 池内默认排除 ETF/联接；强制钉选也不应再钉联接类
             self.assertNotIn("ETF", name_u)
-            # pinned 001638 name contains 股票 but is force-kept in hybrid
-            if row["code"] not in FORCE_INCLUDE.get(row["category"], ()):
-                self.assertNotIn("联接", row.get("name") or "")
+            self.assertNotIn("联接", row.get("name") or "")
             self.assertFalse(str(row["code"]).startswith(("15", "51", "56", "58")))
 
         with TemporaryDirectory() as tmp:

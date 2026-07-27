@@ -209,6 +209,11 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
             {
                 "action": r.get("action"),
                 "mom20Ma28": r.get("mom20Ma28") or "—",
+                "wmDailySignal": r.get("wmDailySignal") or "—",
+                "monthlyTrend": r.get("monthlyTrend") or "—",
+                "wmDailyDetail": r.get("wmDailyDetail") or "—",
+                "maMacdVol": r.get("maMacdVol") or "—",
+                "maMacdVolDetail": r.get("maMacdVolDetail") or "—",
                 "ret20Rank": r.get("ret20_rank"),
                 "aboveMa28": bool(r.get("above_ma28")),
                 "code": code,
@@ -275,6 +280,8 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
         "ret30Entry": review.get("ret30_entry"),
         "ret30AsOf": review.get("ret30_as_of") or review.get("data_date"),
         "counts": {"byAction": by_action, "byTrend": by_trend},
+        "trendScoreCard": review.get("trend_score_card")
+        or _build_trend_score_from_review(review),
         "rows": rows_out,
         "impactEvents": _read_json(impact_path),
         "eventMatrix": _read_json(matrix_path),
@@ -283,6 +290,13 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
         "deliveryCiticIndex": delivery_citic,
     }
     return bundle
+
+
+def _build_trend_score_from_review(review: dict[str, Any]) -> dict[str, Any]:
+    from src.trend_score import build_trend_score_card
+
+    rows = review.get("rows") or []
+    return build_trend_score_card(rows if isinstance(rows, list) else [])
 
 
 def _read_json(path: Path) -> Any | None:
@@ -366,29 +380,63 @@ def cmd_load_latest(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_funds_top30(args: argparse.Namespace) -> int:
-    """Build / refresh the 30 open-end mutual-fund representative pool."""
+def _refresh_funds_top30(*, rebuild: bool = False, output: Path | None = None) -> dict[str, Any]:
+    """Refresh 30-fund pool NAV / estimates; returns summary dict (raises on hard failure)."""
     from src.funds_top30 import build_funds_top30, write_funds_top30
 
-    out = Path(args.output) if args.output else (OUT_DIR / "funds-top30.json")
+    out = output or (OUT_DIR / "funds-top30.json")
     previous = None
-    if out.exists() and not args.rebuild:
+    if out.exists() and not rebuild:
         try:
             previous = json.loads(out.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             previous = None
 
+    result = build_funds_top30(rebuild=rebuild, previous=previous)
+    write_funds_top30(out, result)
+    return {
+        "ok": True,
+        "asOf": result.get("asOf"),
+        "counts": result.get("counts"),
+        "rowCount": len(result.get("rows") or []),
+        "outputPath": str(out),
+        "rebuilt": bool(rebuild) or not previous,
+    }
+
+
+def cmd_funds_top30(args: argparse.Namespace) -> int:
+    """Build / refresh the 30 open-end mutual-fund representative pool."""
+    out = Path(args.output) if args.output else (OUT_DIR / "funds-top30.json")
     try:
-        result = build_funds_top30(rebuild=bool(args.rebuild), previous=previous)
-        write_funds_top30(out, result)
-        summary = {
-            "ok": True,
-            "asOf": result.get("asOf"),
-            "counts": result.get("counts"),
-            "rowCount": len(result.get("rows") or []),
-            "outputPath": str(out),
-            "rebuilt": bool(args.rebuild) or not previous,
-        }
+        summary = _refresh_funds_top30(rebuild=bool(args.rebuild), output=out)
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def _refresh_my_holdings(*, output: Path | None = None) -> dict[str, Any]:
+    """Refresh personal holdings NAV / estimates + position advice."""
+    from src.my_holdings import build_my_holdings, write_my_holdings
+
+    out = output or (OUT_DIR / "my-holdings.json")
+    result = build_my_holdings()
+    write_my_holdings(out, result)
+    return {
+        "ok": True,
+        "asOf": result.get("asOf"),
+        "counts": result.get("counts"),
+        "rowCount": len(result.get("rows") or []),
+        "outputPath": str(out),
+    }
+
+
+def cmd_my_holdings(args: argparse.Namespace) -> int:
+    """Build / refresh personal fund holdings archive."""
+    out = Path(args.output) if args.output else (OUT_DIR / "my-holdings.json")
+    try:
+        summary = _refresh_my_holdings(output=out)
         print(json.dumps(summary, ensure_ascii=False))
         return 0
     except Exception as exc:  # noqa: BLE001
@@ -572,6 +620,51 @@ def cmd_generate(args: argparse.Namespace) -> int:
         latest.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         dated.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+        # 30 公募与 ETF 日更并存；失败不阻断 ETF 产物
+        funds_summary: dict[str, Any] | None = None
+        print(json.dumps({"event": "step_start", "step": "funds_top30"}, ensure_ascii=False), flush=True)
+        try:
+            funds_summary = _refresh_funds_top30(rebuild=False)
+            print(
+                json.dumps({"event": "step_done", "step": "funds_top30", **funds_summary}, ensure_ascii=False),
+                flush=True,
+            )
+        except Exception as funds_exc:  # noqa: BLE001
+            print(
+                json.dumps(
+                    {
+                        "event": "step_error",
+                        "step": "funds_top30",
+                        "ok": False,
+                        "error": str(funds_exc),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+
+        holdings_summary: dict[str, Any] | None = None
+        print(json.dumps({"event": "step_start", "step": "my_holdings"}, ensure_ascii=False), flush=True)
+        try:
+            holdings_summary = _refresh_my_holdings()
+            print(
+                json.dumps({"event": "step_done", "step": "my_holdings", **holdings_summary}, ensure_ascii=False),
+                flush=True,
+            )
+        except Exception as hold_exc:  # noqa: BLE001
+            print(
+                json.dumps(
+                    {
+                        "event": "step_error",
+                        "step": "my_holdings",
+                        "ok": False,
+                        "error": str(hold_exc),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+
         print(
             json.dumps(
                 {
@@ -581,6 +674,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
                     "rowCount": len(bundle["rows"]),
                     "latestPath": str(latest),
                     "counts": bundle["counts"],
+                    "fundsTop30": funds_summary,
+                    "myHoldings": holdings_summary,
                 },
                 ensure_ascii=False,
             ),
@@ -648,6 +743,14 @@ def main() -> int:
         help="Output JSON path (default: data/out/funds-top30.json)",
     )
     p_funds.set_defaults(func=cmd_funds_top30)
+
+    p_hold = sub.add_parser("my-holdings", help="Build/refresh personal fund holdings + position advice")
+    p_hold.add_argument(
+        "--output",
+        default=None,
+        help="Output JSON path (default: data/out/my-holdings.json)",
+    )
+    p_hold.set_defaults(func=cmd_my_holdings)
 
     args = ap.parse_args()
     return int(args.func(args))

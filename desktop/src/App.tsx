@@ -5,12 +5,15 @@ import {
   DEFAULT_FILTERS,
   DetailFilters,
   MAIN_TABS,
+  MA_MACD_VOL,
   MOM20_MA28,
+  WM_DAILY_SIGNALS,
   RSI_OPTS,
   SIGN_OPTS,
   SORTS,
   TRENDS,
   filterRows,
+  fmtLots,
   fmtNum,
   fmtPct,
   hasActiveFilters,
@@ -18,6 +21,7 @@ import {
 } from "./filters";
 import DashboardBoard from "./dashboard/DashboardBoard";
 import FundsTop30Panel from "./FundsTop30Panel";
+import HoldingsPanel from "./HoldingsPanel";
 import { buildDailyNarration } from "./narration";
 import type { UiBundle } from "./types";
 
@@ -36,6 +40,20 @@ function actionTone(action: string): string {
 function momTone(signal: string): string {
   if (signal === "买入" || signal === "持有") return "good";
   if (signal === "换仓") return "warn";
+  return "";
+}
+
+function wmDailyTone(signal: string): string {
+  if (signal === "做多信号") return "good";
+  if (signal === "等日线" || signal === "日线过热") return "warn";
+  if (signal === "不做多") return "bad";
+  return "";
+}
+
+function maMacdVolTone(signal: string): string {
+  if (signal === "可买入") return "good";
+  if (signal === "等量能" || signal === "等买点" || signal === "方向未齐") return "warn";
+  if (signal === "量能存疑" || signal === "暂缓") return "bad";
   return "";
 }
 
@@ -194,7 +212,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">ETF-68</div>
         <div className="meta">
-          {bundle ? `${bundle.dataDate} · 宽度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"} · {pyInfo}
+          {bundle ? `${bundle.dataDate} · 温度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"} · {pyInfo}
         </div>
         <div className="spacer" />
         <button className="btn" disabled={!bundle || busy} onClick={onSpeak}>
@@ -213,7 +231,7 @@ export default function App() {
         </button>
       </header>
 
-      {tab !== "board" && tab !== "funds30" && (
+      {tab !== "board" && tab !== "funds30" && tab !== "holdings" && (
         <section className="stats">
           <div className="stat">
             <div className="label">状态</div>
@@ -262,8 +280,9 @@ export default function App() {
 
       <main className="main">
         {tab === "funds30" && <FundsTop30Panel />}
+        {tab === "holdings" && <HoldingsPanel />}
 
-        {tab !== "funds30" && !bundle && (
+        {tab !== "funds30" && tab !== "holdings" && !bundle && (
           <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>
         )}
 
@@ -272,6 +291,9 @@ export default function App() {
         {bundle && tab === "delivery" && (
           <div className="panel">
             <h2>股指期货交割日历（2026）</h2>
+            <p className="meta" style={{ marginTop: -4, marginBottom: 10 }}>
+              分品种列为中信期货(代客)当日净增仓（手）；其它机构合计 = 总体合计 − 中信合计；总体合计为中期所排名会员当日净增仓合计。
+            </p>
             {!bundle.deliveryCalendar?.months?.length && !bundle.deliveryCiticIndex?.rows?.length ? (
               <div className="empty">缺少交割日历静态数据（data/static）。</div>
             ) : (
@@ -282,12 +304,28 @@ export default function App() {
                       <th>月份</th>
                       <th>交割日</th>
                       <th>顺延</th>
-                      <th>中信净持仓</th>
                       <th>立场</th>
-                      <th className="num">IH%</th>
-                      <th className="num">IF%</th>
-                      <th className="num">IC%</th>
-                      <th className="num">IM%</th>
+                      <th className="num" title="中信期货(代客) · 上证50">
+                        上证50(IH)
+                      </th>
+                      <th className="num" title="中信期货(代客) · 沪深300">
+                        沪深300(IF)
+                      </th>
+                      <th className="num" title="中信期货(代客) · 中证500">
+                        中证500(IC)
+                      </th>
+                      <th className="num" title="中信期货(代客) · 中证1000">
+                        中证1000(IM)
+                      </th>
+                      <th className="num" title="中信四品种净增仓合计">
+                        中信合计
+                      </th>
+                      <th className="num" title="排名会员合计 − 中信">
+                        其它机构合计
+                      </th>
+                      <th className="num" title="中期所排名会员当日净增仓合计">
+                        总体合计
+                      </th>
                       <th>备注</th>
                     </tr>
                   </thead>
@@ -297,16 +335,18 @@ export default function App() {
                         <td>{r.month}月</td>
                         <td>{r.delivery}</td>
                         <td>{r.shifted ? "是" : "否"}</td>
-                        <td className="num">{r.citicTotal ?? "—"}</td>
                         <td>
                           <span className={`pill ${r.stance === "净加多" ? "good" : r.stance === "净加空" ? "bad" : ""}`}>
                             {r.citicLabel || r.stance || "—"}
                           </span>
                         </td>
-                        <td className={pctClass(r.IH)}>{fmtPct(r.IH)}</td>
-                        <td className={pctClass(r.IF)}>{fmtPct(r.IF)}</td>
-                        <td className={pctClass(r.IC)}>{fmtPct(r.IC)}</td>
-                        <td className={pctClass(r.IM)}>{fmtPct(r.IM)}</td>
+                        <td className={pctClass(r.IH)}>{fmtLots(r.IH)}</td>
+                        <td className={pctClass(r.IF)}>{fmtLots(r.IF)}</td>
+                        <td className={pctClass(r.IC)}>{fmtLots(r.IC)}</td>
+                        <td className={pctClass(r.IM)}>{fmtLots(r.IM)}</td>
+                        <td className={pctClass(r.citicTotal)}>{fmtLots(r.citicTotal)}</td>
+                        <td className={pctClass(r.otherTotal)}>{fmtLots(r.otherTotal)}</td>
+                        <td className={pctClass(r.grandTotal)}>{fmtLots(r.grandTotal)}</td>
                         <td>{r.note || "—"}</td>
                       </tr>
                     ))}
@@ -346,6 +386,10 @@ export default function App() {
                         <th>日期</th>
                         <th className="num">净持仓合计</th>
                         <th>立场</th>
+                        <th className="num">上证%</th>
+                        <th className="num">深证%</th>
+                        <th className="num">创业板%</th>
+                        <th className="num">科创板%</th>
                         <th>标签</th>
                       </tr>
                     </thead>
@@ -362,6 +406,10 @@ export default function App() {
                                 {d.stance || "—"}
                               </span>
                             </td>
+                            <td className={pctClass(d.shPct)}>{fmtPct(d.shPct)}</td>
+                            <td className={pctClass(d.szPct)}>{fmtPct(d.szPct)}</td>
+                            <td className={pctClass(d.cybPct)}>{fmtPct(d.cybPct)}</td>
+                            <td className={pctClass(d.kcbPct)}>{fmtPct(d.kcbPct)}</td>
                             <td>{d.label || "—"}</td>
                           </tr>
                         ))}
@@ -540,6 +588,26 @@ export default function App() {
                   </option>
                 ))}
               </select>
+              <select
+                value={filters.wmDailySignal}
+                onChange={(e) => setFilter("wmDailySignal", e.target.value)}
+              >
+                {WM_DAILY_SIGNALS.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "全部" ? "周月日信号：全部" : `周月日信号：${s}`}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.maMacdVol}
+                onChange={(e) => setFilter("maMacdVol", e.target.value)}
+              >
+                {MA_MACD_VOL.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "全部" ? "MA+MACD+量：全部" : `MA+MACD+量：${s}`}
+                  </option>
+                ))}
+              </select>
               <select value={filters.etf} onChange={(e) => setFilter("etf", e.target.value)}>
                 <option value="全部">ETF：全部</option>
                 {filterOptions.etfs.map((e) => (
@@ -621,6 +689,10 @@ export default function App() {
                   <tr>
                     <th>状态</th>
                     <th title="20日涨幅第1且站上MA28买入；掉出前3或跌破MA28换仓">动量轮动</th>
+                    <th title="月线+周线同时多头定方向；日线MA20/MA60多头且未过热出做多信号">
+                      周月日信号
+                    </th>
+                    <th title="MA定方向 + MACD找买点 + 成交量验真伪">MA+MACD+量</th>
                     <th>代码</th>
                     <th>名称</th>
                     <th>板块</th>
@@ -661,6 +733,22 @@ export default function App() {
                           }
                         >
                           {r.mom20Ma28 || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`pill ${wmDailyTone(r.wmDailySignal || "—")}`}
+                          title={r.wmDailyDetail || undefined}
+                        >
+                          {r.wmDailySignal || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`pill ${maMacdVolTone(r.maMacdVol || "—")}`}
+                          title={r.maMacdVolDetail || undefined}
+                        >
+                          {r.maMacdVol || "—"}
                         </span>
                       </td>
                       <td>{r.code}</td>

@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from src.market_data import DailyBar, MarketDataError, PublicMarketDataProvider, parse_eastmoney_bars, parse_tencent_bars, _secid, _tencent_symbol
 from src.reporting import ReportDataError
+from src.ma_macd_vol import ADVICE_FRAMEWORK as MA_MACD_VOL_FRAMEWORK, compute_ma_macd_vol_fields
 from src.weekly_signals import (
     MAX_DD_GATE,
     MIN_SAMPLES,
@@ -23,6 +24,7 @@ from src.weekly_signals import (
     volume_price_from_ratio_ret,
     volume_price_to_dict,
 )
+from src.wm_daily_signal import decide_wm_daily_signal
 
 MODULE_ROOT = Path(__file__).resolve().parent
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -154,6 +156,27 @@ def apply_to_review(review_path: Path, by_code: dict[str, dict[str, Any]]) -> No
             volume_price_bearish=vp.bearish,
             volume_price_bullish=vp.bullish,
         )
+        monthly = str(row.get("monthlyTrend") or "震荡")
+        row["wmDailySignal"] = decide_wm_daily_signal(
+            monthly_trend=monthly,
+            weekly_trend=str(row.get("weeklyTrend") or "震荡"),
+            daily_trend=daily_ma,
+            ret1=float(row.get("ret1_pct") or 0),
+            distance_ma20=float(row.get("distance_ma20_pct") or 0),
+        )
+        row["wmDailyDetail"] = (
+            f"月{monthly}·周{row.get('weeklyTrend') or '震荡'}·日{daily_ma}"
+        )
+        macd = row.get("macd") if isinstance(row.get("macd"), dict) else {}
+        row.update(
+            compute_ma_macd_vol_fields(
+                daily_trend=daily_ma,
+                macd_state=str(macd.get("state") or ""),
+                volume_price_label=vp.label,
+                volume_price_bullish=vp.bullish,
+                volume_price_bearish=vp.bearish,
+            )
+        )
     # re-sort like build_report
     rank = {"技术候选": 0, "观察": 1, "不追涨": 2, "暂缓": 3}
     report["rows"].sort(
@@ -168,6 +191,7 @@ def apply_to_review(review_path: Path, by_code: dict[str, dict[str, Any]]) -> No
         "gate": {"minSamples": MIN_SAMPLES, "maxDdPct": MAX_DD_GATE},
         "volumePrice": "量升价增看多；量升价不涨看空并拦截技术候选",
     }
+    report["ma_macd_vol_framework"] = MA_MACD_VOL_FRAMEWORK
     review_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 

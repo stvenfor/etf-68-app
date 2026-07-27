@@ -38,9 +38,12 @@ python3.12 build_composition.py
 
 要点：
 
-- 按章合成 VO（Edge 晓晓）；文案未变可复用缓存，改口播的章会重合成
+- 按章合成 VO（Edge 晓晓，**分句语气** `prosody_v2`：涨/跌调速调调 + 句间短停顿）；文案未变且 marker 匹配可复用缓存，改口播或语气版本会重合成
 - **不要**为赶时长硬裁剪 VO；软预算仅作参考
-- 写入封面时长 `COVER_S`、水印、双语字幕、章节进度条、分章 GSAP 动效
+- 写入封面时长 `COVER_S`、水印、双语字幕、章节进度条、分章 GSAP 动效（行 spotlight / 数字 count-up，无 `back.out`）
+- 章节过渡 + 指标击中 SFX：`assets/sfx/{whoosh,tick,pop,chime}.mp3`（收束用 chime）
+- 默认可同时写出竖屏工程：`~/Desktop/work/videos/etf68-daily-review-portrait/`（**1080×1920 / 9:16**，手机安全区 + 卡片式布局，assets 软链）
+  - 渲染：`cd …/etf68-daily-review-portrait && npx hyperframes@0.7.71 render -o out/…-portrait.mp4`
 
 ### 3. 校验与渲染
 
@@ -87,7 +90,7 @@ python3.12 export_opencut_package.py
 | 项 | 约定 |
 |----|------|
 | 封面 | 首帧约 `COVER_S` 秒：品牌 ETF-68、当日市场复盘、日期、水印 |
-| 声明 | 右上：`数据来源于网络，不构成投资建议` |
+| 声明 | 右上：`数据来源于网络，不构成投资建议`；收束口播/画面：`数据来源于网络，仅供参考` |
 | 水印 | `小哈的一天快乐`（主水印 + 角标） |
 | 进度条 | 高 30px；段内显示中文章标题（可辅英）；当前章高亮填充 |
 | 字幕 | 上中文、下英文（真实英文，非中文重复）；避开进度条 |
@@ -96,9 +99,10 @@ python3.12 export_opencut_package.py
 | 颜色 | 涨/流入红；跌/流出绿 |
 | 上涨占比 | 原「市场宽度」；开场可附简短解释 |
 
-章节 id：`open` / `sectors` / `movers` / `citic` / `news` / `candidates` / `close`。
+章节 id：`open` / `sectors` / `citic` / `news` / `candidates` / `close`（已去掉波动领先）。
+中信章展示三项：中信多空、其它机构多空单、当日多空单总计（`grandTotal`/`otherTotal`，可由 CFFEX 日文件补全）。
 
-改布局：`render_chapter_body` + `chapter_motion_js` + `render_html`（均在 `build_composition.py`）。
+改布局：`render_chapter_body` + `chapter_motion_and_sfx` + `render_html`（均在 `build_composition.py`）。
 
 改口播内容：优先 `engine/src/review_script.py`，再跑 review-script → build_composition。
 

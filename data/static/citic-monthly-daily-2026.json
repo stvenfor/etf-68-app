@@ -16,7 +16,11 @@
           "IF": -861,
           "IC": 700,
           "IM": -1958,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": -0.26,
+          "szPct": -0.18,
+          "cybPct": -0.2,
+          "kcbPct": 1.35
         }
       ],
       "monthNet": -2301,
@@ -38,7 +42,11 @@
           "IF": -423,
           "IC": -1363,
           "IM": -114,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": 0.87,
+          "szPct": 1.36,
+          "cybPct": 0.99,
+          "kcbPct": -0.34
         }
       ],
       "monthNet": -1563,
@@ -60,7 +68,11 @@
           "IF": -2090,
           "IC": -3679,
           "IM": -1012,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": -1.24,
+          "szPct": -0.25,
+          "cybPct": 1.3,
+          "kcbPct": -1.55
         }
       ],
       "monthNet": -6326,
@@ -82,7 +94,11 @@
           "IF": 1827,
           "IC": 505,
           "IM": 405,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": -0.1,
+          "szPct": 0.6,
+          "cybPct": 1.43,
+          "kcbPct": 0.08
         }
       ],
       "monthNet": 1909,
@@ -104,7 +120,11 @@
           "IF": -538,
           "IC": 986,
           "IM": -2310,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": -1.02,
+          "szPct": -1.17,
+          "cybPct": -0.56,
+          "kcbPct": -1.67
         },
         {
           "date": "2026-05-29",
@@ -116,7 +136,11 @@
           "IF": 588,
           "IC": 1073,
           "IM": -1479,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.73,
+          "szPct": -1.81,
+          "cybPct": -2.11,
+          "kcbPct": -5.04
         }
       ],
       "monthNet": -692,
@@ -138,7 +162,11 @@
           "IF": -240,
           "IC": -388,
           "IM": 100,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.27,
+          "szPct": -1.51,
+          "cybPct": -2.15,
+          "kcbPct": -5.0
         },
         {
           "date": "2026-06-02",
@@ -150,7 +178,11 @@
           "IF": 509,
           "IC": -36,
           "IM": 224,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.43,
+          "szPct": 1.63,
+          "cybPct": 2.66,
+          "kcbPct": 1.62
         },
         {
           "date": "2026-06-03",
@@ -162,7 +194,11 @@
           "IF": -541,
           "IC": 265,
           "IM": 498,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.22,
+          "szPct": 0.73,
+          "cybPct": 1.65,
+          "kcbPct": 2.11
         },
         {
           "date": "2026-06-04",
@@ -174,7 +210,11 @@
           "IF": -2000,
           "IC": -508,
           "IM": -51,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.64,
+          "szPct": -0.27,
+          "cybPct": -0.83,
+          "kcbPct": 0.69
         },
         {
           "date": "2026-06-05",
@@ -186,7 +226,11 @@
           "IF": -317,
           "IC": 633,
           "IM": 876,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.74,
+          "szPct": -2.21,
+          "cybPct": -3.2,
+          "kcbPct": -4.01
         },
         {
           "date": "2026-06-08",
@@ -198,7 +242,11 @@
           "IF": 860,
           "IC": -1638,
           "IM": -2090,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.7,
+          "szPct": -3.22,
+          "cybPct": -3.69,
+          "kcbPct": -4.3
         },
         {
           "date": "2026-06-09",
@@ -210,7 +258,11 @@
           "IF": 1552,
           "IC": 37,
           "IM": 2989,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.28,
+          "szPct": 3.02,
+          "cybPct": 3.93,
+          "kcbPct": 4.17
         },
         {
           "date": "2026-06-10",
@@ -222,7 +274,11 @@
           "IF": -307,
           "IC": -386,
           "IM": 194,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.42,
+          "szPct": -2.06,
+          "cybPct": -2.7,
+          "kcbPct": -0.65
         },
         {
           "date": "2026-06-11",
@@ -234,7 +290,11 @@
           "IF": 287,
           "IC": -103,
           "IM": -1239,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.16,
+          "szPct": -0.68,
+          "cybPct": -1.13,
+          "kcbPct": 0.62
         },
         {
           "date": "2026-06-12",
@@ -246,7 +306,11 @@
           "IF": 2879,
           "IC": 1178,
           "IM": -208,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.12,
+          "szPct": 0.75,
+          "cybPct": 0.5,
+          "kcbPct": 0.05
         },
         {
           "date": "2026-06-17",
@@ -258,7 +322,11 @@
           "IF": 83,
           "IC": 23,
           "IM": 150,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.4,
+          "szPct": 1.31,
+          "cybPct": 1.56,
+          "kcbPct": 4.69
         },
         {
           "date": "2026-06-18",
@@ -270,7 +338,11 @@
           "IF": 855,
           "IC": 538,
           "IM": 305,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.43,
+          "szPct": 0.94,
+          "cybPct": 2.05,
+          "kcbPct": 3.84
         },
         {
           "date": "2026-06-22",
@@ -282,7 +354,11 @@
           "IF": -3932,
           "IC": -1313,
           "IM": -2311,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": 1.78,
+          "szPct": 2.13,
+          "cybPct": 2.52,
+          "kcbPct": 1.96
         },
         {
           "date": "2026-06-23",
@@ -294,7 +370,11 @@
           "IF": 711,
           "IC": 737,
           "IM": 851,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.37,
+          "szPct": -3.17,
+          "cybPct": -3.84,
+          "kcbPct": -1.68
         },
         {
           "date": "2026-06-24",
@@ -306,7 +386,11 @@
           "IF": 673,
           "IC": 315,
           "IM": 8,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.11,
+          "szPct": 1.24,
+          "cybPct": 1.41,
+          "kcbPct": 3.82
         },
         {
           "date": "2026-06-25",
@@ -318,7 +402,11 @@
           "IF": -1067,
           "IC": 400,
           "IM": -516,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.23,
+          "szPct": 1.82,
+          "cybPct": 2.84,
+          "kcbPct": 3.87
         },
         {
           "date": "2026-06-26",
@@ -330,7 +418,11 @@
           "IF": -1303,
           "IC": -449,
           "IM": 539,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -2.26,
+          "szPct": -3.44,
+          "cybPct": -4.07,
+          "kcbPct": -1.65
         },
         {
           "date": "2026-06-29",
@@ -342,7 +434,11 @@
           "IF": 899,
           "IC": 481,
           "IM": -320,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.16,
+          "szPct": 0.19,
+          "cybPct": 0.54,
+          "kcbPct": 4.61
         },
         {
           "date": "2026-06-30",
@@ -354,7 +450,11 @@
           "IF": 377,
           "IC": -87,
           "IM": 1155,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.5,
+          "szPct": 2.48,
+          "cybPct": 2.99,
+          "kcbPct": 3.85
         }
       ],
       "monthNet": 2326,
@@ -376,7 +476,11 @@
           "IF": -1016,
           "IC": 125,
           "IM": 761,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.44,
+          "szPct": -0.53,
+          "cybPct": -1.89,
+          "kcbPct": -2.48
         },
         {
           "date": "2026-07-02",
@@ -388,7 +492,11 @@
           "IF": -535,
           "IC": -1414,
           "IM": -2371,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -2.03,
+          "szPct": -3.85,
+          "cybPct": -5.71,
+          "kcbPct": -7.7
         },
         {
           "date": "2026-07-03",
@@ -400,7 +508,11 @@
           "IF": 208,
           "IC": -1299,
           "IM": -930,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.37,
+          "szPct": 0.64,
+          "cybPct": 0.07,
+          "kcbPct": -0.59
         },
         {
           "date": "2026-07-06",
@@ -412,7 +524,11 @@
           "IF": 413,
           "IC": -398,
           "IM": -2473,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.06,
+          "szPct": -1.16,
+          "cybPct": -1.77,
+          "kcbPct": 1.04
         },
         {
           "date": "2026-07-07",
@@ -424,7 +540,11 @@
           "IF": -525,
           "IC": -468,
           "IM": -721,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.26,
+          "szPct": -1.24,
+          "cybPct": -0.94,
+          "kcbPct": 0.28
         },
         {
           "date": "2026-07-08",
@@ -436,7 +556,11 @@
           "IF": -222,
           "IC": -1725,
           "IM": -910,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.49,
+          "szPct": -1.87,
+          "cybPct": -1.7,
+          "kcbPct": 0.73
         },
         {
           "date": "2026-07-09",
@@ -448,7 +572,11 @@
           "IF": -779,
           "IC": -1424,
           "IM": -1145,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.65,
+          "szPct": 3.07,
+          "cybPct": 4.49,
+          "kcbPct": 8.41
         },
         {
           "date": "2026-07-10",
@@ -460,7 +588,11 @@
           "IF": -24,
           "IC": 1510,
           "IM": -126,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.0,
+          "szPct": -2.29,
+          "cybPct": -4.37,
+          "kcbPct": -5.53
         },
         {
           "date": "2026-07-13",
@@ -472,7 +604,11 @@
           "IF": -60,
           "IC": 963,
           "IM": 732,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -2.06,
+          "szPct": -3.48,
+          "cybPct": -3.1,
+          "kcbPct": -3.42
         },
         {
           "date": "2026-07-14",
@@ -484,7 +620,11 @@
           "IF": 463,
           "IC": 105,
           "IM": -245,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.36,
+          "szPct": 2.77,
+          "cybPct": 3.43,
+          "kcbPct": 0.77
         },
         {
           "date": "2026-07-15",
@@ -496,7 +636,11 @@
           "IF": 2192,
           "IC": -1590,
           "IM": -827,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -0.29,
+          "szPct": -0.97,
+          "cybPct": -1.21,
+          "kcbPct": -4.25
         },
         {
           "date": "2026-07-16",
@@ -508,7 +652,11 @@
           "IF": -204,
           "IC": 580,
           "IM": 486,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.85,
+          "szPct": -1.97,
+          "cybPct": -2.95,
+          "kcbPct": -4.02
         },
         {
           "date": "2026-07-17",
@@ -520,7 +668,11 @@
           "IF": -1201,
           "IC": 119,
           "IM": -971,
-          "isDelivery": true
+          "isDelivery": true,
+          "shPct": -3.05,
+          "szPct": -5.4,
+          "cybPct": -7.15,
+          "kcbPct": -7.12
         },
         {
           "date": "2026-07-20",
@@ -532,7 +684,11 @@
           "IF": 116,
           "IC": -474,
           "IM": -553,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.85,
+          "szPct": -0.71,
+          "cybPct": 0.42,
+          "kcbPct": 0.19
         },
         {
           "date": "2026-07-21",
@@ -544,7 +700,11 @@
           "IF": 1213,
           "IC": 2341,
           "IM": 2814,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 1.79,
+          "szPct": 4.81,
+          "cybPct": 7.05,
+          "kcbPct": 10.73
         },
         {
           "date": "2026-07-22",
@@ -556,7 +716,11 @@
           "IF": 406,
           "IC": -945,
           "IM": 1932,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.07,
+          "szPct": -1.42,
+          "cybPct": -3.23,
+          "kcbPct": -2.26
         },
         {
           "date": "2026-07-23",
@@ -568,7 +732,11 @@
           "IF": 69,
           "IC": -84,
           "IM": 251,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": 0.25,
+          "szPct": 0.44,
+          "cybPct": 0.25,
+          "kcbPct": -3.78
         },
         {
           "date": "2026-07-24",
@@ -580,7 +748,11 @@
           "IF": -334,
           "IC": 611,
           "IM": -1333,
-          "isDelivery": false
+          "isDelivery": false,
+          "shPct": -1.61,
+          "szPct": -2.47,
+          "cybPct": -2.65,
+          "kcbPct": -0.14
         }
       ],
       "monthNet": -5114,
@@ -594,5 +766,11 @@
     "cached": 43,
     "fail": 104,
     "daysWanted": 147
+  },
+  "indexPctSource": {
+    "shPct": "上证指数 sh000001",
+    "szPct": "深证成指 sz399001",
+    "cybPct": "创业板指 sz399006",
+    "kcbPct": "科创50 sh000688"
   }
 }

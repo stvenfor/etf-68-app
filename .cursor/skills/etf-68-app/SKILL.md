@@ -2,15 +2,15 @@
 name: etf-68-app
 description: >-
   ETF-68 Mac 桌面版与当日市场复盘视频流水线：日更生成、UiBundle 组装、Edge TTS、
-  review-script、HyperFrames 成片、OpenCut 终剪、30 公募代表池净值。
+  review-script、HyperFrames 成片、OpenCut 终剪、30 公募代表池净值、我的持仓。
   Use when working on etf-68-app, 市场复盘 MP4, Edge TTS 晓晓, OpenCut 草稿,
-  review_script, build_composition, 日更播报, funds-top30, 30 公募,
-  or desktop Electron IPC speakText.
+  review_script, build_composition, 日更播报, funds-top30, 30 公募, my-holdings,
+  我的持仓, or desktop Electron IPC speakText.
 ---
 
 # ETF-68 App
 
-68 只代表池 ETF 日更技术面桌面应用 + 当日市场复盘横屏视频；并存「30 公募」页签。
+68 只代表池 ETF 日更技术面桌面应用 + 当日市场复盘横屏视频；并存「30 公募」与「我的持仓」页签。
 
 ## 何时读更多
 
@@ -35,9 +35,10 @@ npm run engine:generate
 # 或应用内「生成今日」
 ```
 
-产物：`data/out/latest.json`；明细在 `engine/reports/`。
+产物：`data/out/latest.json`；明细在 `engine/reports/`。  
+`generate` **末尾会顺带刷 30 公募与我的持仓净值/估值**（失败不阻断 ETF 产物）。
 
-30 公募：
+30 公募（也可单独刷）：
 
 ```bash
 cd engine && python3.12 cli_app.py funds-top30 --rebuild
@@ -46,14 +47,22 @@ python3.12 cli_app.py funds-top30   # 仅刷净值
 
 产物：`data/out/funds-top30.json`（股4/债4/混16/QDII4；股票型固定科技主题：半导体/芯片/CPO·通信设备/机器人；混合型含手动增删；最新已公布净值 + 实时估值含涨跌值）。
 
+我的持仓（个人归档，与代表池并存；不含货币/联接）：
+
+```bash
+python3.12 cli_app.py my-holdings
+```
+
+产物：`data/out/my-holdings.json`（板块 themes + 仓位建议：继续持有/可加仓/减仓观察/考虑赎回；不存金额盈亏）。
+
 打包：`npm run dist:mac` → `release/`。
 
 ## 架构一览
 
 ```
-desktop/          Electron + React UI（筛选 / 看板 / 日更播报 / 30 公募）
-engine/           Python 日更管线 + TTS + review-script + funds_top30
-data/out/         latest.json、funds-top30.json、bundle-*.json、tts-cache/
+desktop/          Electron + React UI（筛选 / 看板 / 日更播报 / 30 公募 / 我的持仓）
+engine/           Python 日更管线 + TTS + review-script + funds_top30 + my_holdings
+data/out/         latest.json、funds-top30.json、my-holdings.json、bundle-*.json、tts-cache/
 engine/reports/   技术面 / 边缘条件 / 回测 / 事件矩阵 JSON
 ```
 
@@ -71,7 +80,7 @@ engine/reports/   技术面 / 边缘条件 / 回测 / 事件矩阵 JSON
 6. 水印：`小哈的一天快乐`；需封面帧 + 中英文字幕（上中下英）+ 底部章节进度条（高 30px，章标题在条内）。
 7. 终剪交付走 **OpenCut**；桌面版须用持久 Chrome Profile，否则草稿丢失。
 
-章节顺序：`开场 → 板块 → 波动 → 中信 → 消息 → 技术候选 → 收束`。
+章节顺序：`开场 → 板块 → 中信多空（含其它机构 / 当日总计） → 消息 → 技术候选 → 收束`。
 
 ## 常用 CLI
 
@@ -90,6 +99,9 @@ python3.12 cli_app.py review-script --output ../data/out/review_script.json
 
 # 30 公募代表池
 python3.12 cli_app.py funds-top30 --rebuild
+
+# 我的持仓
+python3.12 cli_app.py my-holdings
 ```
 
 ## 桌面 TTS

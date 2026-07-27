@@ -3,6 +3,7 @@ import type { EtfRow } from "./types";
 export const MAIN_TABS = [
   { id: "board", label: "数据看板" },
   { id: "funds30", label: "30 公募" },
+  { id: "holdings", label: "我的持仓" },
   { id: "delivery", label: "交割日历" },
   { id: "citic", label: "中信多空" },
   { id: "events", label: "事件→ETF" },
@@ -12,6 +13,23 @@ export const MAIN_TABS = [
 
 export const ACTIONS = ["全部", "技术候选", "观察", "不追涨", "暂缓"] as const;
 export const MOM20_MA28 = ["全部", "买入", "持有", "换仓", "—"] as const;
+export const WM_DAILY_SIGNALS = [
+  "全部",
+  "做多信号",
+  "等日线",
+  "日线过热",
+  "方向未齐",
+  "不做多",
+] as const;
+export const MA_MACD_VOL = [
+  "全部",
+  "可买入",
+  "等量能",
+  "量能存疑",
+  "等买点",
+  "方向未齐",
+  "暂缓",
+] as const;
 export const TRENDS = ["全部", "多头", "震荡", "空头"] as const;
 export const SIGN_OPTS = ["全部", "正", "负", "持平/--"] as const;
 export const DD_OPTS = ["全部", "浅(<3%)", "中(3-8%)", "深(8-15%)", "极深(≥15%)"] as const;
@@ -40,6 +58,8 @@ export const SORTS = [
 export type DetailFilters = {
   action: string;
   mom20Ma28: string;
+  wmDailySignal: string;
+  maMacdVol: string;
   etf: string;
   sector: string;
   trend: string;
@@ -62,6 +82,8 @@ export type DetailFilters = {
 export const DEFAULT_FILTERS: DetailFilters = {
   action: "全部",
   mom20Ma28: "全部",
+  wmDailySignal: "全部",
+  maMacdVol: "全部",
   etf: "全部",
   sector: "全部",
   trend: "全部",
@@ -84,6 +106,12 @@ export const DEFAULT_FILTERS: DetailFilters = {
 export function fmtPct(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
+}
+
+export function fmtLots(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  const n = Math.round(v);
+  return `${n > 0 ? "+" : ""}${n}`;
 }
 
 export function fmtNum(v: number | null | undefined, digits = 2): string {
@@ -129,6 +157,8 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
   let out = rows.filter((r) => {
     if (f.action !== "全部" && r.action !== f.action) return false;
     if (f.mom20Ma28 !== "全部" && (r.mom20Ma28 || "—") !== f.mom20Ma28) return false;
+    if (f.wmDailySignal !== "全部" && (r.wmDailySignal || "—") !== f.wmDailySignal) return false;
+    if (f.maMacdVol !== "全部" && (r.maMacdVol || "—") !== f.maMacdVol) return false;
     if (f.etf !== "全部" && r.code !== f.etf) return false;
     if (f.sector !== "全部" && r.sector !== f.sector) return false;
     if (f.trend !== "全部" && r.trend !== f.trend) return false;

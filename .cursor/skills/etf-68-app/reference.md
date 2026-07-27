@@ -71,7 +71,7 @@ etf-68-app/
 
 ### `generate`
 
-完整日更：技术面 → 边缘条件 → 周/日回测 → 实质事件 → 事件矩阵 → `assemble_ui_bundle`。
+完整日更：技术面 → 边缘条件 → 周/日回测 → 实质事件 → 事件矩阵 → `assemble_ui_bundle` → **刷 30 公募** → **刷我的持仓**（失败均不阻断）。
 
 ```bash
 python3.12 cli_app.py generate [--date YYYY-MM-DD] [--seed PATH] [--workers 6]
@@ -120,7 +120,7 @@ python3.12 cli_app.py review-script [--date YYYY-MM-DD] [--bundle PATH] [--outpu
 
 ### `funds-top30`
 
-场外开放式「30 公募」代表池：各大类内按近似规模（份额×净值）取前 N（股4/债4/混16/QDII4），写出最新已公布单位净值与实时估值。混合型另有 `FORCE_INCLUDE` / `FORCE_EXCLUDE` 手动增删。
+场外开放式「30 公募」代表池：各大类内按近似规模（份额×净值）取前 N（股4/债4/混16/QDII4），写出最新已公布单位净值与实时估值。混合型另有 `FORCE_INCLUDE` / `FORCE_EXCLUDE` 手动增删（综合性医疗主题钉选 `110023` 易方达医疗保健行业混合；排除中欧医疗健康 `003095`/`003096` 与 ETF 联接 `009881`）。
 
 ```bash
 python3.12 cli_app.py funds-top30 [--rebuild] [--output PATH]
@@ -130,7 +130,21 @@ python3.12 cli_app.py funds-top30 [--rebuild] [--output PATH]
 - 无 `--rebuild`：复用 `data/out/funds-top30.json` 名单，仅刷东方财富 pingzhong 净值 + 新浪实时估值  
 - 排除 ETF / **ETF联接**（名称含「联接」）/ 货币；同基金多份额只留规模最大的一只  
 - 各大类按配额上限截取，**不足则按实际数量**（不强行凑满 30）  
-- 实时估值字段：`estimateNav` / `estimateChangePct`（相对最新公布净值的当天估算涨跌）/ `estimateTime` 
+- 实时估值字段：`estimateNav` / `estimateChangePct`（相对最新公布净值的当天估算涨跌）/ `estimateTime`
+- 「建议」字段：`advice` / `adviceDetail` / `adviceRisk` / `estimatePremiumPct`（申购侧规则化观察；见 `engine/src/fund_advice.py`） 
+
+### `my-holdings`
+
+个人持仓归档（与 30 代表池独立）：静态种子 `HOLDINGS_SEED`（不含货币 / ETF联接），刷净值与估值后给出**仓位侧**建议。
+
+```bash
+python3.12 cli_app.py my-holdings [--output PATH]
+```
+
+- 产出 `data/out/my-holdings.json`
+- 每行含 `themes[]`（板块/风格）与 `styleNote`
+- 仓位建议：`继续持有` / `可加仓` / `减仓观察` / `考虑赎回` / `暂缓`（见 `engine/src/position_advice.py`）
+- **不存储**持仓金额与盈亏
 
 ## UiBundle 要点
 
@@ -155,6 +169,8 @@ python3.12 cli_app.py funds-top30 [--rebuild] [--output PATH]
 5. `build_substantive_impact_events.py` → 实质利好利空
 6. `build_event_etf_impact_matrix.py` → 事件×ETF 矩阵
 7. `assemble_ui_bundle` → `latest.json`
+8. `_refresh_funds_top30` → `funds-top30.json`（软失败）
+9. `_refresh_my_holdings` → `my-holdings.json`（软失败）
 
 子进程经 `_clear_proxy_env()`：去掉常见代理变量，设 `NO_PROXY=*`、`PYTHONPATH=engine`。
 
@@ -162,6 +178,8 @@ python3.12 cli_app.py funds-top30 [--rebuild] [--output PATH]
 
 - 生成日更：主进程调 `cli_app.py generate`
 - `speakText`：主进程调 `cli_app.py tts`，音频 base64 回渲染进程
+- 30 公募：`load-funds-top30` / `refresh-funds-top30`
+- 我的持仓：`load-my-holdings` / `refresh-my-holdings`
 - 打包后引擎可写目录在用户侧 `out/` / `reports/`；首次启动可从包内种子拷贝静态数据
 
 ## 测试

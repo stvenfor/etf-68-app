@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 
@@ -12,12 +15,17 @@ TARGET_DURATION_S = 70.0
 CHAPTER_BUDGETS = {
     "open": 6.0,
     "sectors": 14.0,
-    "movers": 14.0,
-    "citic": 7.0,
+    "citic": 12.0,
     "news": 16.0,
     "candidates": 22.0,
     "close": 5.0,
 }
+
+_CFFEX_CANDIDATES = (
+    os.environ.get("ETF68_CFFEX_DIR", "").strip(),
+    str(Path.home() / "Desktop/github/my_tool_project/modules/cffex-daily/work/output"),
+    str(Path(__file__).resolve().parents[2] / "cffex-daily" / "work" / "output"),
+)
 
 
 def _num(v: Any) -> float | None:
@@ -95,6 +103,7 @@ def top_bottom_sectors(avgs: list[dict[str, Any]], n: int = 3) -> dict[str, list
 
 
 def volatility_leaders(rows: list[dict[str, Any]], n: int = 5) -> list[dict[str, Any]]:
+    """Kept for callers/tests; no longer used in review chapters."""
     scored: list[dict[str, Any]] = []
     for row in rows:
         ret1 = _num(row.get("ret1"))
@@ -111,6 +120,37 @@ def volatility_leaders(rows: list[dict[str, Any]], n: int = 5) -> list[dict[str,
         )
     scored.sort(key=lambda x: x["absRet1"], reverse=True)
     return scored[:n]
+
+
+def _stance_from_lots(v: float | None) -> str:
+    if v is None:
+        return "—"
+    if v > 0:
+        return "净加多"
+    if v < 0:
+        return "净加空"
+    return "平"
+
+
+def _load_cffex_day(day: str) -> dict[str, Any] | None:
+    """Optional enrichment: citic_total / net_buy_total from cffex-daily export."""
+    stem = day.replace("-", "")
+    if len(stem) != 8:
+        return None
+    for raw in _CFFEX_CANDIDATES:
+        if not raw:
+            continue
+        path = Path(raw) / f"citic-net-positions-{stem}.json"
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        return data
+    return None
 
 
 def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
@@ -134,14 +174,50 @@ def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
     cur_total = _num(cur.get("citicTotal"))
     prev_total = _num(prev.get("citicTotal")) if prev else None
     delta = None if cur_total is None or prev_total is None else cur_total - prev_total
+
+    other_total = _num(cur.get("otherTotal"))
+    grand_total = _num(cur.get("grandTotal")) or _num(cur.get("netBuyTotal"))
+
+    # Delivery-day table (grand/other) when date matches
+    for row in (bundle.get("deliveryCiticIndex") or {}).get("rows") or []:
+        if str(row.get("delivery") or "") != cur_date:
+            continue
+        if cur_total is None:
+            cur_total = _num(row.get("citicTotal"))
+        if other_total is None:
+            other_total = _num(row.get("otherTotal"))
+        if grand_total is None:
+            grand_total = _num(row.get("grandTotal"))
+        break
+
+    # Daily CFFEX export: net_buy_total = 排名会员当日净增仓合计
+    cffex = _load_cffex_day(cur_date)
+    if cffex:
+        if cur_total is None:
+            cur_total = _num(cffex.get("citic_total"))
+        if grand_total is None:
+            grand_total = _num(cffex.get("net_buy_total"))
+        if other_total is None and grand_total is not None and cur_total is not None:
+            other_total = grand_total - cur_total
+        # Prefer derived other when both sides exist
+        elif grand_total is not None and cur_total is not None:
+            other_total = grand_total - cur_total
+
+    if other_total is None and grand_total is not None and cur_total is not None:
+        other_total = grand_total - cur_total
+
     return {
         "ok": True,
         "date": cur_date,
         "prevDate": str(prev["date"]) if prev else None,
         "citicTotal": cur_total,
+        "otherTotal": other_total,
+        "grandTotal": grand_total,
         "prevTotal": prev_total,
         "delta": delta,
-        "stance": cur.get("stance") or "—",
+        "stance": cur.get("stance") or _stance_from_lots(cur_total),
+        "otherStance": _stance_from_lots(other_total),
+        "grandStance": _stance_from_lots(grand_total),
         "label": cur.get("label") or "—",
     }
 
@@ -228,16 +304,15 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
     rows = list(bundle.get("rows") or [])
     breadth = _num(bundle.get("breadthPct"))
     sectors = top_bottom_sectors(sector_averages(rows), 3)
-    movers = volatility_leaders(rows, 5)
     citic = citic_change(bundle)
     news = collect_news(bundle, 5)
     cands = technical_candidates(rows, 5)
 
     # Narration lines (compact for 45–60s)
-    # 「上涨占比」= 当日上涨标的占比，比「市场宽度」更好懂
+    # 「市场温度」= 站上均线 / 均线上行 / 5日上涨 / 资金流入 的综合热度
     open_line = f"ETF六十八市场复盘。数据日期{day}。"
     if breadth is not None:
-        open_line += f"上涨占比百分之{breadth:.1f}。"
+        open_line += f"市场温度百分之{breadth:.1f}。"
 
     g_parts = [f"{x['sector']}{_fmt_pct(x['avgRet1'])}" for x in sectors["gainers"]]
     l_parts = [f"{x['sector']}{_fmt_pct(x['avgRet1'])}" for x in sectors["losers"]]
@@ -249,25 +324,20 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
     if not g_parts and not l_parts:
         sector_line += "暂无板块收益数据。"
 
-    if movers:
-        m_parts = [f"{m['name']}{_fmt_pct(m['ret1'])}" for m in movers]
-        movers_line = "波动领先。" + "，".join(m_parts) + "。"
-    else:
-        movers_line = "波动领先。暂无涨跌数据。"
+    def _lots_txt(v: Any) -> str:
+        n = _num(v)
+        if n is None:
+            return "暂无"
+        return f"{int(n)}手"
 
     if citic.get("ok"):
-        delta = citic.get("delta")
-        if delta is None:
-            delta_txt = "较前日变化暂无"
-        elif delta > 0:
-            delta_txt = f"较前日增加{abs(int(delta))}手"
-        elif delta < 0:
-            delta_txt = f"较前日减少{abs(int(delta))}手"
-        else:
-            delta_txt = "较前日持平"
         citic_line = (
-            f"中信多空。当日净额{int(citic['citicTotal']) if citic.get('citicTotal') is not None else '暂无'}手，"
-            f"{citic.get('stance') or '—'}，{delta_txt}。"
+            f"中信多空。中信{_lots_txt(citic.get('citicTotal'))}，"
+            f"{citic.get('stance') or '—'}；"
+            f"其它机构多空单{_lots_txt(citic.get('otherTotal'))}，"
+            f"{citic.get('otherStance') or '—'}；"
+            f"当日多空单总计{_lots_txt(citic.get('grandTotal'))}，"
+            f"{citic.get('grandStance') or '—'}。"
         )
     else:
         citic_line = "中信多空。暂无当日持仓数据。"
@@ -288,14 +358,13 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         c_parts = []
         for c in cands:
             c_parts.append(
-                f"{c['name']}当日涨跌{_fmt_pct(c['ret1'])}，五日涨跌{_fmt_pct(c['ret5'])}，"
-                f"当日资金{_fmt_yi(c['flow1'])}，五日资金{_fmt_yi(c['flow5'])}"
+                f"{c['name']}当日{_fmt_pct(c['ret1'])}，五日{_fmt_pct(c['ret5'])}"
             )
         cand_line = "技术候选资金。" + "。".join(c_parts) + "。"
     else:
         cand_line = "技术候选资金。今日暂无技术候选。"
 
-    close_line = "复盘结束。数据仅供梳理，不构成投资建议。"
+    close_line = "复盘结束。数据来源于网络，仅供参考。"
 
     chapters = [
         {
@@ -307,7 +376,7 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
             "caption": f"复盘 · {day}",
             "bullets": [
                 f"数据日期 {day}",
-                f"上涨占比 {_fmt_pct(breadth, digits=1) if breadth is not None else '暂无'}",
+                f"市场温度 {_fmt_pct(breadth, digits=1) if breadth is not None else '暂无'}",
             ],
         },
         {
@@ -323,36 +392,22 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
             ),
         },
         {
-            "id": "movers",
-            "title": "波动领先",
-            "kicker": "03 · 波动",
-            "budget_s": CHAPTER_BUDGETS["movers"],
-            "narration": movers_line,
-            "caption": "波动领先 · |涨跌幅| 前五",
-            "bullets": [
-                f"{_etf_label(m['name'], m['code'])} {_fmt_pct(m['ret1'])}" for m in movers
-            ],
-        },
-        {
             "id": "citic",
             "title": "中信多空",
-            "kicker": "04 · 多空",
+            "kicker": "03 · 多空",
             "budget_s": CHAPTER_BUDGETS["citic"],
             "narration": citic_line,
-            "caption": "中信净持仓较前日",
+            "caption": "中信 / 其它机构 / 当日总计",
             "bullets": [
-                f"当日 {citic.get('citicTotal', '—')} 手 · {citic.get('stance', '—')}",
-                (
-                    f"较前日 {int(citic['delta']):+d} 手"
-                    if citic.get("ok") and citic.get("delta") is not None
-                    else "较前日 暂无"
-                ),
+                f"中信 {_lots_txt(citic.get('citicTotal'))} · {citic.get('stance', '—')}",
+                f"其它机构 {_lots_txt(citic.get('otherTotal'))} · {citic.get('otherStance', '—')}",
+                f"当日总计 {_lots_txt(citic.get('grandTotal'))} · {citic.get('grandStance', '—')}",
             ],
         },
         {
             "id": "news",
             "title": "实质消息",
-            "kicker": "05 · 消息",
+            "kicker": "04 · 消息",
             "budget_s": CHAPTER_BUDGETS["news"],
             "narration": news_line,
             "caption": "实质利好 / 利空 各五",
@@ -364,15 +419,12 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         {
             "id": "candidates",
             "title": "技术候选资金",
-            "kicker": "06 · 候选",
+            "kicker": "05 · 候选",
             "budget_s": CHAPTER_BUDGETS["candidates"],
             "narration": cand_line,
-            "caption": "技术候选 · 涨跌 / 资金",
+            "caption": "技术候选 · 涨跌百分比",
             "bullets": [
-                (
-                    f"{_etf_label(c['name'], c['code'])} 日{_fmt_pct(c['ret1'])}/5日{_fmt_pct(c['ret5'])} · "
-                    f"资日{_fmt_yi(c['flow1'])}/5日{_fmt_yi(c['flow5'])}"
-                )
+                f"{_etf_label(c['name'], c['code'])} 日{_fmt_pct(c['ret1'])}/5日{_fmt_pct(c['ret5'])}"
                 for c in cands
             ]
             or ["今日暂无技术候选"],
@@ -380,7 +432,7 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         {
             "id": "close",
             "title": "收束",
-            "kicker": "07 · 结束",
+            "kicker": "06 · 结束",
             "budget_s": CHAPTER_BUDGETS["close"],
             "narration": close_line,
             "caption": "数据梳理 · 非投资建议",
@@ -395,7 +447,6 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         "targetDurationS": TARGET_DURATION_S,
         "breadthPct": breadth,
         "sectors": sectors,
-        "movers": movers,
         "citic": citic,
         "news": news,
         "candidates": cands,

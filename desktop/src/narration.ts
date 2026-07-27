@@ -24,7 +24,7 @@ export function buildDailyNarration(bundle: UiBundle, rows?: EtfRow[]): string {
   parts.push(`ETF六十八日更播报。数据日期${bundle.dataDate}。`);
 
   if (bundle.breadthPct != null && !Number.isNaN(bundle.breadthPct)) {
-    parts.push(`市场宽度百分之${bundle.breadthPct.toFixed(1)}。`);
+    parts.push(`市场温度百分之${bundle.breadthPct.toFixed(1)}。`);
   }
 
   parts.push(

@@ -18,7 +18,10 @@ from .reporting import (
     score_sentiment,
     validate_sector_context,
 )
+from .ma_macd_vol import ADVICE_FRAMEWORK as MA_MACD_VOL_FRAMEWORK, compute_ma_macd_vol_fields
 from .mom20_ma28 import apply_mom20_ma28
+from .trend_score import build_trend_score_card
+from .wm_daily_signal import MONTHLY_MA_FAST, MONTHLY_MA_SLOW, compute_wm_daily_fields
 from .weekly_signals import (
     DEFAULT_MA_PAIR,
     DEFAULT_MACD_MODE,
@@ -71,6 +74,8 @@ def build_report(
         ma60 = fmean(bar.close for bar in bars[-60:])
         prior_ma20 = fmean(bar.close for bar in bars[-25:-5])
         ma20_rising = ma20 > prior_ma20
+        prior_ma60 = fmean(bar.close for bar in bars[-65:-5]) if len(bars) >= 65 else None
+        ma60_rising = ma60 > prior_ma60 if prior_ma60 is not None else None
         ret1 = _return_pct(bars, 1)
         ret5 = _return_pct(bars, 5)
         ret10 = _return_pct(bars, 10)
@@ -121,6 +126,20 @@ def build_report(
             volume_price_bearish=vp.bearish,
             volume_price_bullish=vp.bullish,
         )
+        wm_fields = compute_wm_daily_fields(
+            bars,
+            weekly_trend=trend,
+            daily_trend=daily_trend,
+            ret1=ret1,
+            distance_ma20=distance_ma20,
+        )
+        mmv_fields = compute_ma_macd_vol_fields(
+            daily_trend=daily_trend,
+            macd_state=macd.state,
+            volume_price_label=vp.label,
+            volume_price_bullish=vp.bullish,
+            volume_price_bearish=vp.bearish,
+        )
         theme = _theme_for(
             context, str(metadata["sector"]), str(metadata.get("market", "CN"))
         )
@@ -133,6 +152,7 @@ def build_report(
                 "ma28": ma28,
                 "ma60": ma60,
                 "ma20_rising": ma20_rising,
+                "ma60_rising": ma60_rising,
                 "ret1_pct": ret1,
                 "ret5_pct": ret5,
                 "ret10_pct": ret10,
@@ -146,6 +166,8 @@ def build_report(
                 "dailyMaTrend": daily_trend,
                 "trend": trend,
                 "action": action,
+                **wm_fields,
+                **mmv_fields,
                 "kdj": asdict(kdj),
                 "macd": asdict(macd),
                 "flows": {str(window): asdict(flow) for window, flow in flows.items()},
@@ -212,7 +234,14 @@ def build_report(
             "gateRequiredForCandidate": True,
             "volumePrice": "量升价增看多；量升价不涨看空并拦截技术候选",
         },
+        "wm_daily_framework": {
+            "rule": "月线+周线同时多头定方向；日线MA20/MA60多头且未过热给出做多信号",
+            "monthlyMa": f"M{MONTHLY_MA_FAST}/{MONTHLY_MA_SLOW}",
+            "signals": ["做多信号", "等日线", "日线过热", "方向未齐", "不做多"],
+        },
+        "ma_macd_vol_framework": MA_MACD_VOL_FRAMEWORK,
         "mom20_ma28_framework": mom_meta,
+        "trend_score_card": build_trend_score_card(output_rows),
         "rows": output_rows,
     }
 

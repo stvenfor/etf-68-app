@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("etf68", {
   speakText: (payload) => ipcRenderer.invoke("speak-text", payload || {}),
   loadFundsTop30: () => ipcRenderer.invoke("load-funds-top30"),
   refreshFundsTop30: (payload) => ipcRenderer.invoke("refresh-funds-top30", payload || {}),
+  loadMyHoldings: () => ipcRenderer.invoke("load-my-holdings"),
+  refreshMyHoldings: () => ipcRenderer.invoke("refresh-my-holdings"),
   onGenerateLog: (cb) => {
     const handler = (_e, line) => cb(line);
     ipcRenderer.on("generate-log", handler);

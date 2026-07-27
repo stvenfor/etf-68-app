@@ -55,9 +55,13 @@ class ReviewScriptTests(unittest.TestCase):
 
         script = build_review_script(bundle)
         self.assertTrue(script["ok"])
-        self.assertEqual(7, len(script["chapters"]))
+        self.assertEqual(6, len(script["chapters"]))
         self.assertEqual(-60, script["citic"]["delta"])
+        self.assertNotIn("波动领先", script["fullNarration"])
+        self.assertTrue(all(c["id"] != "movers" for c in script["chapters"]))
         self.assertIn("技术候选资金", script["fullNarration"])
+        self.assertIn("其它机构多空单", script["fullNarration"])
+        self.assertIn("当日多空单总计", script["fullNarration"])
 
 
 if __name__ == "__main__":

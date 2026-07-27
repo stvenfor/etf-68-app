@@ -1,6 +1,11 @@
 export type EtfRow = {
   action: string;
   mom20Ma28: string;
+  wmDailySignal: string;
+  monthlyTrend: string;
+  wmDailyDetail: string;
+  maMacdVol: string;
+  maMacdVolDetail: string;
   ret20Rank: number | null;
   aboveMa28: boolean;
   code: string;
@@ -35,6 +40,24 @@ export type EtfRow = {
   kdjMacdRef: string;
 };
 
+export type TrendScoreDimension = {
+  key: string;
+  label: string;
+  weight: number;
+  score: number | null;
+  note?: string | null;
+};
+
+export type TrendScoreCard = {
+  total: number;
+  rating: string;
+  advice: string;
+  dimensions: TrendScoreDimension[];
+  weights?: Record<string, number>;
+  missing?: string[];
+  framework?: Record<string, string>;
+};
+
 export type ImpactEventRow = {
   code: string;
   name: string;
@@ -61,6 +84,7 @@ export type UiBundle = {
   ret30Entry?: string | null;
   ret30AsOf?: string | null;
   counts: { byAction: Record<string, number>; byTrend: Record<string, number> };
+  trendScoreCard?: TrendScoreCard | null;
   rows: EtfRow[];
   impactEvents?: { rows: ImpactEventRow[]; method?: string } | null;
   eventMatrix?: EventMatrix | null;
@@ -85,6 +109,16 @@ export type UiBundle = {
         citicTotal?: number;
         stance?: string;
         label?: string;
+        IH?: number | null;
+        IF?: number | null;
+        IC?: number | null;
+        IM?: number | null;
+        isDelivery?: boolean;
+        /** 当日现货指数涨跌幅（%） */
+        shPct?: number | null;
+        szPct?: number | null;
+        cybPct?: number | null;
+        kcbPct?: number | null;
       }>;
     }>;
   } | null;
@@ -92,13 +126,23 @@ export type UiBundle = {
     rows: Array<{
       month: number;
       delivery: string;
-      citicTotal?: number;
+      citicTotal?: number | null;
+      otherTotal?: number | null;
+      grandTotal?: number | null;
       stance?: string;
       citicLabel?: string;
-      IH?: number;
-      IF?: number;
-      IC?: number;
-      IM?: number;
+      /** 中信期货各品种当日净增仓（手） */
+      IH?: number | null;
+      IF?: number | null;
+      IC?: number | null;
+      IM?: number | null;
+      /** 交割日对应现货指数涨跌幅（%），表内不展示 */
+      ihPct?: number | null;
+      ifPct?: number | null;
+      icPct?: number | null;
+      imPct?: number | null;
+      shPct?: number | null;
+      szPct?: number | null;
       shifted?: boolean;
       note?: string;
     }>;
@@ -118,7 +162,12 @@ export type FundTop30Row = {
   estimateChange?: number | null;
   estimateChangePct?: number | null;
   estimateTime?: string | null;
+  estimatePremiumPct?: number | null;
   rankInCategory?: number | null;
+  /** 申购侧规则化观察：可关注 / 相对友好 / 观望 / 不追高 / 暂缓 */
+  advice?: string;
+  adviceDetail?: string;
+  adviceRisk?: string;
   error?: string;
 };
 
@@ -127,7 +176,53 @@ export type FundsTop30Bundle = {
   asOf?: string;
   quota?: Record<string, number>;
   counts?: Record<string, number>;
+  adviceCounts?: Record<string, number>;
+  adviceFramework?: {
+    rule?: string;
+    labels?: string[];
+    notInvestmentAdvice?: boolean;
+    risks?: string[];
+  };
   rows: FundTop30Row[];
+  source?: Record<string, string>;
+};
+
+export type MyHoldingRow = {
+  code: string;
+  name: string;
+  category: string;
+  categoryLabel?: string;
+  themes?: string[];
+  styleNote?: string;
+  nav?: number | null;
+  navDate?: string | null;
+  dayChangePct?: number | null;
+  estimateNav?: number | null;
+  estimateChange?: number | null;
+  estimateChangePct?: number | null;
+  estimateTime?: string | null;
+  estimatePremiumPct?: number | null;
+  rankInCategory?: number | null;
+  /** 持仓侧：继续持有 / 可加仓 / 减仓观察 / 考虑赎回 / 暂缓 */
+  advice?: string;
+  adviceDetail?: string;
+  adviceRisk?: string;
+  error?: string;
+};
+
+export type MyHoldingsBundle = {
+  ok?: boolean;
+  asOf?: string;
+  counts?: Record<string, number>;
+  adviceCounts?: Record<string, number>;
+  adviceFramework?: {
+    rule?: string;
+    labels?: string[];
+    notInvestmentAdvice?: boolean;
+    risks?: string[];
+  };
+  excludedNote?: string;
+  rows: MyHoldingRow[];
   source?: Record<string, string>;
 };
 
@@ -177,6 +272,16 @@ declare global {
         ok: boolean;
         bundle?: FundsTop30Bundle;
         rebuilt?: boolean;
+        error?: string;
+      }>;
+      loadMyHoldings: () => Promise<{
+        ok: boolean;
+        bundle?: MyHoldingsBundle;
+        error?: string;
+      }>;
+      refreshMyHoldings: () => Promise<{
+        ok: boolean;
+        bundle?: MyHoldingsBundle;
         error?: string;
       }>;
       onGenerateLog: (cb: (line: string) => void) => () => void;
