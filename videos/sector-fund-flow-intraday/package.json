@@ -1,0 +1,26 @@
+{
+  "name": "sector-fund-flow-intraday",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A-share industry intraday fund-flow vertical video (9:16)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "compositions": "remotion compositions src/index.ts",
+    "still": "remotion still src/index.ts SectorFundFlowIntraday out/still.png --frame=300",
+    "render": "remotion render src/index.ts SectorFundFlowIntraday out/sector-fund-flow.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --muted --image-format=png",
+    "validate": "python3 scripts/validate_video.py out/sector-fund-flow.mp4",
+    "demo-data": "python3 scripts/generate_demo_flow.py --trade-date 2026-07-28 --output src/data/sector-fund-flow-2026-07-28.json"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.500",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.500",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.8.3"
+  }
+}

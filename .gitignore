@@ -10,6 +10,8 @@ __pycache__/
 engine/state/
 engine/reports/
 data/out/
+videos/*/node_modules/
+videos/*/out/
 *.log
 .env
 .venv/
