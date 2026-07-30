@@ -120,6 +120,13 @@ def main() -> None:
         "selectedCount": 20,
         "sectors": sectors,
         "frames": frames,
+        "marketStats": {
+            "totalAmountYi": 11862.4,
+            "vsPrevDayYi": 486.7,
+            "vsFiveDayAvgYi": -215.3,
+            "prevDayAmountYi": 11375.7,
+            "fiveDayAvgAmountYi": 12077.7,
+        },
         "disclaimer": "数据来源于网络，不构成投资建议；流向示意，非真实对手方",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -178,6 +178,47 @@ def yuan_to_yi(value: float) -> float:
     return round(value / 1e8, 4)
 
 
+def fetch_two_market_stats(trade_date: date) -> dict[str, float]:
+    """沪+深日成交额（亿元）及较昨/近五日日均增减。"""
+    def amount_map(symbol: str) -> dict[str, float]:
+        url = (
+            "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/newfqkline/get"
+            f"?param={symbol},day,,,12,qfq&r=0.5"
+        )
+        payload = get_json(url)
+        rows = ((payload.get("data") or {}).get(symbol) or {}).get("day") or []
+        out: dict[str, float] = {}
+        for row in rows:
+            if not isinstance(row, (list, tuple)) or len(row) < 9:
+                continue
+            day = str(row[0])[:10]
+            try:
+                wan = float(row[8])
+            except (TypeError, ValueError):
+                continue
+            out[day] = wan / 10_000.0  # 万元 → 亿
+        return out
+
+    sh = amount_map("sh000001")
+    sz = amount_map("sz399001")
+    target = trade_date.isoformat()
+    dates = sorted(d for d in (set(sh) & set(sz)) if d <= target)
+    if not dates:
+        raise RuntimeError("No two-market turnover series from Tencent fqkline")
+    series = [round(sh[d] + sz[d], 2) for d in dates]
+    today_amt = series[-1]
+    prev_amt = series[-2] if len(series) >= 2 else today_amt
+    last5 = series[-5:]
+    avg5 = round(sum(last5) / len(last5), 2)
+    return {
+        "totalAmountYi": today_amt,
+        "vsPrevDayYi": round(today_amt - prev_amt, 2),
+        "vsFiveDayAvgYi": round(today_amt - avg5, 2),
+        "prevDayAmountYi": prev_amt,
+        "fiveDayAvgAmountYi": avg5,
+    }
+
+
 def build_frames(
     trade_date: date,
     selected: list[dict[str, object]],
@@ -274,6 +315,16 @@ def main() -> None:
         allow_partial=args.allow_partial or args.snapshot_mode == "latest",
     )
 
+    try:
+        market_stats = fetch_two_market_stats(target)
+    except Exception as exc:  # noqa: BLE001 — keep flow freeze even if turnover fails
+        print(f"WARN marketStats unavailable: {exc}", flush=True)
+        market_stats = {
+            "totalAmountYi": 0.0,
+            "vsPrevDayYi": 0.0,
+            "vsFiveDayAvgYi": 0.0,
+        }
+
     # Stable end-of-day cast for particle wiring (final ranking order).
     final = frames[-1]
     sectors = []
@@ -309,6 +360,7 @@ def main() -> None:
         "selectedCount": len(selected),
         "sectors": sectors,
         "frames": frames,
+        "marketStats": market_stats,
         "disclaimer": "数据来源于网络，不构成投资建议；流向示意，非真实对手方",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -321,6 +373,7 @@ def main() -> None:
         "finalOutflow": final["outflowTop"][:5],
         "finalInflow": final["inflowTop"][:5],
         "marketExitYi": final["marketExitYi"],
+        "marketStats": market_stats,
     }, ensure_ascii=False, indent=2))
 
 

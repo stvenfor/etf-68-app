@@ -1,17 +1,26 @@
 import React, {useMemo} from 'react';
 import {AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
-import {ParticleFlow} from './components/ParticleFlow';
+import {FLOW_LAYOUT, ParticleFlow} from './components/ParticleFlow';
 import type {CompositionProps, FlowFrame} from './data/schema';
 
-const W = 1080;
-const H = 1920;
-const GREEN = '#39ff6a';
+const GREEN = '#9AFFB5';
 const RED = '#ff4d4d';
 const GRAY = '#b8b8b8';
-const PANEL_TOP = 320;
-const PANEL_HEIGHT = 1280;
-const ROW_H = 86;
-const LIST_TOP = 70;
+const {
+  sideMargin,
+  safeTop,
+  headerShiftDown,
+  safeBottom,
+  footerShiftUp,
+  panelTop,
+  panelWidth,
+  panelHeight,
+  listPad,
+  listTop,
+  rowH,
+  listContentWidth,
+  pool,
+} = FLOW_LAYOUT;
 
 const TIME_MARKS = ['9:30', '10:30', '11:30', '13:00', '14:00', '15:00'] as const;
 
@@ -27,82 +36,354 @@ function formatYi(value: number): string {
   return `${value.toFixed(2)}亿`;
 }
 
+function formatYiCompact(value: number): string {
+  return `${value.toFixed(1)}亿`;
+}
+
+function signedChange(delta: number): {verb: string; absText: string; color: string} {
+  if (delta > 0) {
+    return {verb: '增加', absText: formatYiCompact(delta), color: RED};
+  }
+  if (delta < 0) {
+    return {verb: '减少', absText: formatYiCompact(Math.abs(delta)), color: GREEN};
+  }
+  return {verb: '持平', absText: '0.0亿', color: GRAY};
+}
+
+const MarketStatsBand: React.FC<{
+  totalAmountYi: number;
+  vsPrevDayYi: number;
+  vsFiveDayAvgYi: number;
+}> = ({totalAmountYi, vsPrevDayYi, vsFiveDayAvgYi}) => {
+  const vsPrev = signedChange(vsPrevDayYi);
+  const vsFive = signedChange(vsFiveDayAvgYi);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        padding: '22px 24px',
+        borderRadius: 18,
+        border: '1px solid rgba(255,255,255,0.1)',
+        background:
+          'linear-gradient(180deg, rgba(16,20,28,0.95) 0%, rgba(8,10,14,0.98) 100%)',
+        boxShadow: '0 10px 28px rgba(0,0,0,0.35)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          gap: 16,
+        }}
+      >
+        <div>
+          <div style={{color: '#9aa3ad', fontSize: 16, fontWeight: 600}}>
+            当日两市总成交额
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              color: '#fff',
+              fontSize: 40,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: 0.5,
+            }}
+          >
+            {formatYiCompact(totalAmountYi)}
+          </div>
+        </div>
+        <div
+          style={{
+            color: '#6a7078',
+            fontSize: 14,
+            fontWeight: 600,
+            paddingBottom: 6,
+          }}
+        >
+          单位：亿元
+        </div>
+      </div>
+      <div
+        style={{
+          height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)',
+        }}
+      />
+      <div style={{display: 'flex', gap: 14}}>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'rgba(255,255,255,0.03)',
+          }}
+        >
+          <div style={{color: '#8b9198', fontSize: 15, fontWeight: 600}}>
+            相比上一交易日
+          </div>
+          <div
+            style={{
+              color: vsPrev.color,
+              fontSize: 24,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {vsPrev.verb} {vsPrev.absText}
+          </div>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'rgba(255,255,255,0.03)',
+          }}
+        >
+          <div style={{color: '#8b9198', fontSize: 15, fontWeight: 600}}>
+            相比近五日日均
+          </div>
+          <div
+            style={{
+              color: vsFive.color,
+              fontSize: 24,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {vsFive.verb} {vsFive.absText}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function formatClock(hhmm: string): string {
-  // "09:30" -> "9:30" to match reference chrome
   const [h, m] = hhmm.split(':');
   return `${Number(h)}:${m}`;
 }
 
 const Crown: React.FC<{label: string; color: string}> = ({label, color}) => (
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 4,
-      opacity: 1,
-    }}
-  >
-    <div style={{fontSize: 28, lineHeight: 1}}>👑</div>
-    <div
-      style={{
-        color,
-        fontSize: 18,
-        fontWeight: 700,
-        letterSpacing: 1,
-        textShadow: `0 0 10px ${color}`,
-      }}
-    >
-      {label}
-    </div>
+  <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2}}>
+    <div style={{fontSize: 24, lineHeight: 1}}>👑</div>
+    <div style={{color, fontSize: 16, fontWeight: 700, letterSpacing: 1}}>{label}</div>
   </div>
 );
 
 const Timeline: React.FC<{progress: number; clock: string}> = ({progress, clock}) => {
   const fill = Math.max(0, Math.min(1, progress));
+  // Keep clock fully inside track: center follows thumb, clamped at ends.
+  const clockLeft = Math.max(4, Math.min(96, fill * 100));
   return (
-    <div style={{padding: '0 48px', marginTop: 18}}>
+    <div style={{padding: `0 ${sideMargin}px`, marginTop: 14}}>
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
+          alignItems: 'flex-end',
           color: '#9aa0a6',
-          fontSize: 22,
+          fontSize: 17,
           fontWeight: 600,
-          marginBottom: 10,
+          marginBottom: 8,
+          letterSpacing: 0.2,
         }}
       >
-        {TIME_MARKS.map((mark) => (
-          <span key={mark}>{mark}</span>
+        {TIME_MARKS.map((mark, i) => (
+          <span
+            key={mark}
+            style={{
+              flex: '0 0 auto',
+              textAlign: i === 0 ? 'left' : i === TIME_MARKS.length - 1 ? 'right' : 'center',
+              minWidth: i === 0 || i === TIME_MARKS.length - 1 ? 44 : 48,
+            }}
+          >
+            {mark}
+          </span>
         ))}
       </div>
-      <div style={{position: 'relative', height: 10, borderRadius: 6, background: '#1c1f24'}}>
+      <div style={{position: 'relative', height: 42}}>
+        <div
+          style={{
+            position: 'absolute',
+            left: `${clockLeft}%`,
+            top: 0,
+            transform: 'translateX(-50%)',
+            color: '#fff',
+            fontSize: 22,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+            textShadow: '0 1px 6px rgba(0,0,0,0.75)',
+          }}
+        >
+          {clock}
+        </div>
         <div
           style={{
             position: 'absolute',
             left: 0,
-            top: 0,
+            right: 0,
             bottom: 0,
-            width: `${fill * 100}%`,
+            height: 12,
             borderRadius: 6,
-            background: 'linear-gradient(90deg, #2dff6a 0%, #ffcc33 55%, #ff4d4d 100%)',
-            boxShadow: '0 0 12px rgba(80,255,120,0.35)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: `calc(${fill * 100}% - 4px)`,
-            top: -8,
-            color: '#fff',
-            fontSize: 26,
-            fontWeight: 700,
-            fontVariantNumeric: 'tabular-nums',
-            textShadow: '0 0 8px rgba(0,0,0,0.8)',
-            whiteSpace: 'nowrap',
+            // Full-width color axis always visible (green → yellow → red)
+            background:
+              'linear-gradient(90deg, #7CFFA8 0%, #c8f070 22%, #ffcc33 48%, #ff8a3d 74%, #ff3b3b 100%)',
+            boxShadow: '0 0 14px rgba(255, 170, 60, 0.35)',
           }}
         >
-          {clock}
+          {/* Soft highlight on elapsed segment — does not hide the gradient */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${fill * 100}%`,
+              background:
+                'linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 100%)',
+              borderRadius: 6,
+            }}
+          />
+          {/* Progress thumb */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${fill * 100}%`,
+              top: '50%',
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: '#fff',
+              boxShadow:
+                '0 0 0 3px rgba(0,0,0,0.4), 0 0 14px rgba(255,255,255,0.7), 0 0 22px rgba(255,180,80,0.45)',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SectorRow: React.FC<{
+  align: 'left' | 'right';
+  children: React.ReactNode;
+}> = ({align, children}) => (
+  <div
+    style={{
+      height: rowH,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: align === 'left' ? 'flex-start' : 'flex-end',
+      gap: 10,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const Reservoir: React.FC<{marketExitYi: number}> = ({marketExitYi}) => {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: pool.x - pool.rx,
+        top: pool.y - pool.ry,
+        width: pool.rx * 2,
+        height: pool.ry * 2,
+        zIndex: 2,
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -18,
+          borderRadius: '50%',
+          background:
+            'radial-gradient(ellipse at 50% 50%, rgba(120,170,230,0.28) 0%, rgba(120,170,230,0) 70%)',
+          filter: 'blur(2px)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: '50%',
+          background:
+            'radial-gradient(ellipse at 50% 30%, rgba(200,220,255,0.35) 0%, rgba(40,50,70,0.2) 42%, rgba(8,10,14,0.95) 72%)',
+          border: '2px solid rgba(210,225,245,0.55)',
+          boxShadow: `
+            0 0 0 1px rgba(255,255,255,0.12),
+            0 0 40px 12px rgba(100,150,220,0.3),
+            0 14px 30px rgba(0,0,0,0.6),
+            inset 0 3px 12px rgba(255,255,255,0.18),
+            inset 0 -10px 22px rgba(0,0,0,0.55)
+          `,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: '12%',
+          right: '12%',
+          top: '22%',
+          bottom: '28%',
+          borderRadius: '50%',
+          background:
+            'radial-gradient(ellipse at 40% 30%, rgba(160,200,255,0.35) 0%, rgba(40,70,110,0.55) 45%, rgba(15,25,40,0.85) 100%)',
+          boxShadow: 'inset 0 0 20px rgba(80,140,220,0.35)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: '22%',
+          top: '18%',
+          width: '36%',
+          height: '22%',
+          borderRadius: '50%',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0))',
+          filter: 'blur(1px)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2,
+        }}
+      >
+        <div style={{color: '#eef4ff', fontSize: 28, fontWeight: 800, letterSpacing: 4}}>
+          蓄水池
+        </div>
+        <div style={{color: '#a8b0bc', fontSize: 16, fontWeight: 600}}>市场离场</div>
+        <div
+          style={{
+            color: '#ffffff',
+            fontSize: 28,
+            fontWeight: 800,
+            fontVariantNumeric: 'tabular-nums',
+            textShadow: '0 2px 8px rgba(0,0,0,0.55)',
+          }}
+        >
+          {formatYi(marketExitYi)}
         </div>
       </div>
     </div>
@@ -113,7 +394,6 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
   const frame = useCurrentFrame();
   const {durationInFrames, fps} = useVideoConfig();
 
-  // Scrub trading day over most of the clip; hold close for last ~2s
   const scrubEnd = Math.max(1, durationInFrames - Math.round(fps * 2.2));
   const progress = interpolate(frame, [0, scrubEnd], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -121,12 +401,6 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
   });
   const frameIdx = frameIndexForProgress(data.frames, progress);
   const current = data.frames[frameIdx];
-  const showCrowns = progress >= 0.985;
-
-  const crownOpacity = interpolate(frame, [scrubEnd, scrubEnd + 12], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
 
   const panelOpacity = useMemo(
     () =>
@@ -137,6 +411,8 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
     [frame],
   );
 
+  const footerBottom = safeBottom + footerShiftUp;
+
   return (
     <AbsoluteFill
       style={{
@@ -146,157 +422,247 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
           '"PingFang SC", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif',
       }}
     >
-      {/* Legend */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 28,
-          paddingTop: 56,
-          fontSize: 22,
-          color: '#c5c9ce',
-        }}
-      >
-        <span>
-          <span style={{color: GRAY}}>●</span> 初始状态（灰色）
-        </span>
-        <span>
-          <span style={{color: GREEN}}>●</span> 资金流出（绿）
-        </span>
-        <span>
-          <span style={{color: RED}}>●</span> 资金流入（红）
-        </span>
-        <span>
-          <span style={{color: '#ddd'}}>●</span> 市场离场
-        </span>
+      <div style={{height: safeTop + headerShiftDown}} />
+
+      <div style={{padding: `0 ${sideMargin}px`}}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            marginBottom: 14,
+            gap: 16,
+          }}
+        >
+          <div style={{display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0}}>
+            <div
+              style={{
+                alignSelf: 'flex-start',
+                padding: '4px 12px',
+                borderRadius: 999,
+                background: 'linear-gradient(90deg, rgba(80,180,255,0.28), rgba(255,200,80,0.22))',
+                border: '1px solid rgba(160,210,255,0.45)',
+                color: '#d7ecff',
+                fontSize: 16,
+                fontWeight: 700,
+                letterSpacing: 2,
+              }}
+            >
+              交易日
+            </div>
+            <div
+              style={{
+                fontSize: 44,
+                fontWeight: 800,
+                letterSpacing: 1.5,
+                fontVariantNumeric: 'tabular-nums',
+                backgroundImage:
+                  'linear-gradient(180deg, #ffffff 0%, #b8dcff 45%, #7ec8ff 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+              }}
+            >
+              {data.tradeDate}
+            </div>
+            <div
+              style={{
+                width: 120,
+                height: 3,
+                borderRadius: 2,
+                background: 'linear-gradient(90deg, #5ec8ff, #ffd36a 70%, transparent)',
+              }}
+            />
+          </div>
+          <div
+            style={{
+              maxWidth: 340,
+              textAlign: 'right',
+              flexShrink: 0,
+              paddingBottom: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                color: '#c5ccd4',
+                fontSize: 16,
+                fontWeight: 600,
+                lineHeight: 1.55,
+                letterSpacing: 0.2,
+              }}
+            >
+              数据来源于网络，仅供参考，
+              <br />
+              不构成投资建议
+            </div>
+            <div style={{color: '#8a929c', fontSize: 15, fontWeight: 600}}>
+              单位：{data.unit}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 18,
+            fontSize: 17,
+            color: '#c5c9ce',
+            marginBottom: 4,
+          }}
+        >
+          <span>
+            <span style={{color: GRAY}}>●</span> 蓄水池中转（灰）
+          </span>
+          <span>
+            <span style={{color: GREEN}}>●</span> 资金流出（浅绿）
+          </span>
+          <span>
+            <span style={{color: RED}}>●</span> 资金流入（红）
+          </span>
+          <span>
+            <span style={{color: '#ddd'}}>●</span> 市场离场
+          </span>
+        </div>
       </div>
 
       <Timeline progress={progress} clock={formatClock(current.time)} />
 
-      {/* Title row */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: '28px 56px 0',
-          opacity: panelOpacity,
-        }}
-      >
-        <div style={{color: GREEN, fontSize: 28, fontWeight: 700}}>
-          资金流出板块（绿色）
-        </div>
-        <div style={{color: RED, fontSize: 28, fontWeight: 700}}>
-          资金流入方向（红色）
-        </div>
-      </div>
-
-      {/* Main panel */}
       <div
         style={{
           position: 'absolute',
-          left: 36,
-          right: 36,
-          top: PANEL_TOP,
-          height: PANEL_HEIGHT,
+          left: sideMargin,
+          width: panelWidth,
+          top: panelTop,
+          height: panelHeight,
           borderRadius: 18,
           border: '1px solid #22262c',
           background: 'linear-gradient(180deg, #0b0d10 0%, #050607 100%)',
           opacity: panelOpacity,
           overflow: 'hidden',
+          boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 12px 40px rgba(0,0,0,0.55)',
         }}
       >
+        {/* Side titles inside panel — keep clear of the timeline axis */}
+        <div
+          style={{
+            position: 'absolute',
+            left: listPad,
+            right: listPad,
+            top: 10,
+            display: 'flex',
+            justifyContent: 'space-between',
+            zIndex: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{color: GREEN, fontSize: 20, fontWeight: 700}}>
+            资金流出板块（浅绿）
+          </div>
+          <div style={{color: RED, fontSize: 20, fontWeight: 700}}>
+            资金流入方向（红色）
+          </div>
+        </div>
+
         <ParticleFlow frameData={current} progress={progress} />
+        <Reservoir marketExitYi={current.marketExitYi} />
 
-        {/* Crowns */}
-        {showCrowns ? (
-          <>
-            <div style={{position: 'absolute', left: 170, top: 8, opacity: crownOpacity}}>
-              <Crown label="流出最多" color="#ffd700" />
-            </div>
-            <div style={{position: 'absolute', right: 170, top: 8, opacity: crownOpacity}}>
-              <Crown label="流入最多" color="#ffd700" />
-            </div>
-          </>
-        ) : null}
+        {/* Crowns always visible */}
+        <div
+          style={{
+            position: 'absolute',
+            left: listPad + 36,
+            top: 40,
+            zIndex: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          <Crown label="流出最多" color="#ffd700" />
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            right: listPad + 36,
+            top: 40,
+            zIndex: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          <Crown label="流入最多" color="#ffd700" />
+        </div>
 
-        {/* Outflow list */}
-        <div style={{position: 'absolute', left: 28, top: LIST_TOP, width: 360}}>
-          {current.outflowTop.map((item, i) => (
-            <div
-              key={`o-${item.code}`}
-              style={{
-                height: ROW_H,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
+        <div
+          style={{
+            position: 'absolute',
+            left: listPad,
+            top: listTop,
+            width: listContentWidth,
+            zIndex: 3,
+          }}
+        >
+          {current.outflowTop.map((item) => (
+            <SectorRow key={`o-${item.code}`} align="left">
               <div
                 style={{
-                  width: 10,
-                  height: 36,
-                  borderRadius: 3,
+                  width: 8,
+                  height: 26,
+                  borderRadius: 2,
                   background: GREEN,
-                  boxShadow: `0 0 10px ${GREEN}`,
+                  flexShrink: 0,
                 }}
               />
-              <div style={{display: 'flex', flexDirection: 'column', gap: 4}}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
                 <div
                   style={{
                     color: GREEN,
-                    fontSize: 30,
+                    fontSize: 22,
                     fontWeight: 700,
                     fontVariantNumeric: 'tabular-nums',
-                    textShadow: `0 0 8px rgba(57,255,106,0.35)`,
                   }}
                 >
                   {formatYi(item.netYi)}
                 </div>
-                <div style={{color: '#f2f2f2', fontSize: 26, fontWeight: 600}}>
+                <div style={{color: '#f2f2f2', fontSize: 20, fontWeight: 600}}>
                   {item.name}
                 </div>
               </div>
-              {showCrowns && i === 0 ? (
-                <div style={{marginLeft: 4, fontSize: 22, opacity: crownOpacity}}>👑</div>
-              ) : null}
-            </div>
+            </SectorRow>
           ))}
         </div>
 
-        {/* Inflow list */}
-        <div style={{position: 'absolute', right: 28, top: LIST_TOP, width: 360}}>
-          {current.inflowTop.map((item, i) => (
-            <div
-              key={`i-${item.code}`}
-              style={{
-                height: ROW_H,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: 12,
-              }}
-            >
-              {showCrowns && i === 0 ? (
-                <div style={{marginRight: 4, fontSize: 22, opacity: crownOpacity}}>👑</div>
-              ) : null}
+        <div
+          style={{
+            position: 'absolute',
+            right: listPad,
+            top: listTop,
+            width: listContentWidth,
+            zIndex: 3,
+          }}
+        >
+          {current.inflowTop.map((item) => (
+            <SectorRow key={`i-${item.code}`} align="right">
               <div
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'flex-end',
-                  gap: 4,
+                  gap: 2,
                 }}
               >
-                <div style={{color: '#f2f2f2', fontSize: 26, fontWeight: 600}}>
+                <div style={{color: '#f2f2f2', fontSize: 20, fontWeight: 600}}>
                   {item.name}
                 </div>
                 <div
                   style={{
                     color: RED,
-                    fontSize: 30,
+                    fontSize: 22,
                     fontWeight: 700,
                     fontVariantNumeric: 'tabular-nums',
-                    textShadow: `0 0 8px rgba(255,77,77,0.35)`,
                   }}
                 >
                   {formatYi(item.netYi)}
@@ -304,76 +670,60 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
               </div>
               <div
                 style={{
-                  width: 10,
-                  height: 36,
-                  borderRadius: 3,
+                  width: 8,
+                  height: 26,
+                  borderRadius: 2,
                   background: RED,
-                  boxShadow: `0 0 10px ${RED}`,
+                  flexShrink: 0,
                 }}
               />
-            </div>
+            </SectorRow>
           ))}
-
-          {/* Market exit */}
-          <div
-            style={{
-              marginTop: 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 14,
-            }}
-          >
-            <div style={{textAlign: 'right'}}>
-              <div style={{color: GRAY, fontSize: 24, fontWeight: 600}}>市场离场</div>
-              <div
-                style={{
-                  color: '#eee',
-                  fontSize: 30,
-                  fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {formatYi(current.marketExitYi)}
-              </div>
-            </div>
-            <div
-              style={{
-                width: 18,
-                height: 120,
-                borderRadius: 4,
-                background: 'linear-gradient(180deg, #d0d0d0, #777)',
-                boxShadow: '0 0 12px rgba(200,200,200,0.25)',
-              }}
-            />
-          </div>
         </div>
       </div>
 
-      {/* Footer: date / unit / disclaimer */}
+      {/* Market stats fills the band between panel and footer */}
       <div
         style={{
           position: 'absolute',
-          left: 48,
-          right: 48,
-          bottom: 48,
+          left: sideMargin,
+          right: sideMargin,
+          top: panelTop + panelHeight + 24,
+          bottom: footerBottom + 88,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
-          color: '#8b9198',
-          fontSize: 20,
-          lineHeight: 1.45,
+          justifyContent: 'center',
         }}
       >
-        <div style={{display: 'flex', justifyContent: 'space-between', color: '#b0b6bd'}}>
-          <span>
-            {data.tradeDate} · 单位：{data.unit} · 主力净流入累计
-          </span>
-          <span>{data.synthetic ? '演示数据' : '实盘冻结'}</span>
+        <MarketStatsBand
+          totalAmountYi={data.marketStats.totalAmountYi}
+          vsPrevDayYi={data.marketStats.vsPrevDayYi}
+          vsFiveDayAvgYi={data.marketStats.vsFiveDayAvgYi}
+        />
+      </div>
+
+      {/* Footer: compact, full-visible, no duplicate disclaimer */}
+      <div
+        style={{
+          position: 'absolute',
+          left: sideMargin,
+          right: sideMargin,
+          bottom: footerBottom,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          color: '#8b9198',
+          fontSize: 14,
+          lineHeight: 1.4,
+          overflow: 'visible',
+        }}
+      >
+        <div style={{color: '#9aa3ad', fontSize: 15, fontWeight: 600}}>
+          主力净流入累计 · 流向示意，非真实对手方
         </div>
-        <div>{data.fieldNote}</div>
-        <div>{data.disclaimer}</div>
-        <div style={{fontSize: 16, color: '#6a7078'}}>{data.source}</div>
+        <div style={{color: '#6a7078', fontSize: 13}}>
+          来源：{data.synthetic ? '网络公开数据（演示合成）' : data.source}
+        </div>
       </div>
     </AbsoluteFill>
   );

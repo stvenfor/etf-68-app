@@ -39,6 +39,16 @@ export const FlowDataSchema = z.object({
   selectedCount: z.number(),
   sectors: z.array(SectorMetaSchema),
   frames: z.array(FrameSchema).min(10),
+  marketStats: z.object({
+    /** 当日两市总成交额（亿元） */
+    totalAmountYi: z.number(),
+    /** 相比上一交易日增减（亿元，正=增加） */
+    vsPrevDayYi: z.number(),
+    /** 相比近五日日均增减（亿元，正=增加） */
+    vsFiveDayAvgYi: z.number(),
+    prevDayAmountYi: z.number().optional(),
+    fiveDayAvgAmountYi: z.number().optional(),
+  }),
   disclaimer: z.string(),
 });
 
