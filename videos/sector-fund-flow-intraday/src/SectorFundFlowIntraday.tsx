@@ -19,8 +19,15 @@ const {
   listTop,
   rowH,
   listContentWidth,
+  leftAnchorX,
+  rightAnchorX,
   pool,
 } = FLOW_LAYOUT;
+
+/** Color bar sits 5px from the flow-line endpoint and stays fixed. */
+const BAR_W = 8;
+const BAR_H = 26;
+const BAR_LINE_GAP = 5;
 
 const TIME_MARKS = ['9:30', '10:30', '11:30', '13:00', '14:00', '15:00'] as const;
 
@@ -34,6 +41,13 @@ function frameIndexForProgress(frames: FlowFrame[], progress: number): number {
 
 function formatYi(value: number): string {
   return `${value.toFixed(2)}亿`;
+}
+
+/** Outflow TOP − Inflow TOP: >0 离场, <0 进场. */
+function marketStanceYi(frame: FlowFrame): number {
+  const outSum = frame.outflowTop.reduce((sum, item) => sum + item.netYi, 0);
+  const inSum = frame.inflowTop.reduce((sum, item) => sum + item.netYi, 0);
+  return outSum - inSum;
 }
 
 function formatYiCompact(value: number): string {
@@ -284,18 +298,54 @@ const SectorRow: React.FC<{
 }> = ({align, children}) => (
   <div
     style={{
+      position: 'relative',
       height: rowH,
       display: 'flex',
       alignItems: 'center',
       justifyContent: align === 'left' ? 'flex-start' : 'flex-end',
-      gap: 10,
+      // Keep text clear of the fixed bar near the line endpoint
+      paddingRight: align === 'left' ? BAR_W + 6 : 0,
+      paddingLeft: align === 'right' ? BAR_W + 6 : 0,
     }}
   >
     {children}
   </div>
 );
 
-const Reservoir: React.FC<{marketExitYi: number}> = ({marketExitYi}) => {
+const EndpointBar: React.FC<{side: 'left' | 'right'; color: string}> = ({
+  side,
+  color,
+}) => {
+  // Offset within the side list so the bar locks to endpoint ± BAR_LINE_GAP
+  const listLeft =
+    side === 'left' ? listPad : panelWidth - listPad - listContentWidth;
+  const left =
+    side === 'left'
+      ? leftAnchorX - BAR_LINE_GAP - BAR_W - listLeft
+      : rightAnchorX + BAR_LINE_GAP - listLeft;
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left,
+        top: '50%',
+        width: BAR_W,
+        height: BAR_H,
+        marginTop: -BAR_H / 2,
+        borderRadius: 2,
+        background: color,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+};
+
+const Reservoir: React.FC<{stanceYi: number}> = ({stanceYi}) => {
+  const isEntry = stanceYi < 0;
+  const label = isEntry ? '市场进场' : '市场离场';
+  const amountColor = isEntry ? RED : GREEN;
+  const amount = Math.abs(stanceYi);
+
   return (
     <div
       style={{
@@ -373,17 +423,17 @@ const Reservoir: React.FC<{marketExitYi: number}> = ({marketExitYi}) => {
         <div style={{color: '#eef4ff', fontSize: 28, fontWeight: 800, letterSpacing: 4}}>
           蓄水池
         </div>
-        <div style={{color: '#a8b0bc', fontSize: 16, fontWeight: 600}}>市场离场</div>
+        <div style={{color: amountColor, fontSize: 16, fontWeight: 700}}>{label}</div>
         <div
           style={{
-            color: '#ffffff',
+            color: amountColor,
             fontSize: 28,
             fontWeight: 800,
             fontVariantNumeric: 'tabular-nums',
             textShadow: '0 2px 8px rgba(0,0,0,0.55)',
           }}
         >
-          {formatYi(marketExitYi)}
+          {formatYi(amount)}
         </div>
       </div>
     </div>
@@ -526,7 +576,10 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
             <span style={{color: RED}}>●</span> 资金流入（红）
           </span>
           <span>
-            <span style={{color: '#ddd'}}>●</span> 市场离场
+            <span style={{color: GREEN}}>●</span> 市场离场
+          </span>
+          <span>
+            <span style={{color: RED}}>●</span> 市场进场
           </span>
         </div>
       </div>
@@ -570,7 +623,7 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
         </div>
 
         <ParticleFlow frameData={current} progress={progress} />
-        <Reservoir marketExitYi={current.marketExitYi} />
+        <Reservoir stanceYi={marketStanceYi(current)} />
 
         {/* Crowns always visible */}
         <div
@@ -607,15 +660,6 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
         >
           {current.outflowTop.map((item) => (
             <SectorRow key={`o-${item.code}`} align="left">
-              <div
-                style={{
-                  width: 8,
-                  height: 26,
-                  borderRadius: 2,
-                  background: GREEN,
-                  flexShrink: 0,
-                }}
-              />
               <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
                 <div
                   style={{
@@ -631,6 +675,7 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
                   {item.name}
                 </div>
               </div>
+              <EndpointBar side="left" color={GREEN} />
             </SectorRow>
           ))}
         </div>
@@ -646,6 +691,7 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
         >
           {current.inflowTop.map((item) => (
             <SectorRow key={`i-${item.code}`} align="right">
+              <EndpointBar side="right" color={RED} />
               <div
                 style={{
                   display: 'flex',
@@ -668,15 +714,6 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
                   {formatYi(item.netYi)}
                 </div>
               </div>
-              <div
-                style={{
-                  width: 8,
-                  height: 26,
-                  borderRadius: 2,
-                  background: RED,
-                  flexShrink: 0,
-                }}
-              />
             </SectorRow>
           ))}
         </div>

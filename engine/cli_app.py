@@ -273,23 +273,178 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
     citic = _read_json(static_dir / "citic-monthly-daily-2026.json")
     delivery_citic = _read_json(static_dir / "delivery-days-citic-and-index-2026.json")
 
+    data_date = str(review.get("data_date") or day)
+    market_board = _build_market_board_soft(data_date)
+    citic = _sync_citic_monthly(citic, market_board=market_board, as_of=data_date, static_dir=static_dir)
+    impact_events = _soft_refresh_impact_events(impact_path, as_of=data_date)
+    bond_review = _build_bond_review_soft(as_of=data_date, rows=rows_out)
+
     bundle = {
-        "dataDate": review.get("data_date") or day,
+        "dataDate": data_date,
         "generatedAt": datetime.now(SHANGHAI).isoformat(),
         "breadthPct": review.get("breadth_pct"),
         "ret30Entry": review.get("ret30_entry"),
         "ret30AsOf": review.get("ret30_as_of") or review.get("data_date"),
         "counts": {"byAction": by_action, "byTrend": by_trend},
-        "trendScoreCard": review.get("trend_score_card")
-        or _build_trend_score_from_review(review),
+        "bondReview": bond_review,
+        "marketBoard": market_board,
         "rows": rows_out,
-        "impactEvents": _read_json(impact_path),
+        "impactEvents": impact_events,
         "eventMatrix": _read_json(matrix_path),
         "deliveryCalendar": delivery,
         "citicMonthly": citic,
         "deliveryCiticIndex": delivery_citic,
     }
     return bundle
+
+
+def _sync_citic_monthly(
+    citic: dict[str, Any] | None,
+    *,
+    market_board: dict[str, Any] | None,
+    as_of: str,
+    static_dir: Path,
+) -> dict[str, Any] | None:
+    """Merge local cffex-daily exports into citicMonthly and persist when changed."""
+    from src.citic_sync import default_cffex_dirs, merge_cffex_into_citic_monthly
+
+    merged = merge_cffex_into_citic_monthly(
+        citic,
+        cffex_dirs=default_cffex_dirs(REPO_ROOT),
+        market_board=market_board,
+        as_of=as_of,
+    )
+    if not isinstance(merged, dict):
+        return citic
+    # Persist so next offline assemble keeps the new day.
+    try:
+        if merged is not citic:
+            target = static_dir / "citic-monthly-daily-2026.json"
+            target.write_text(
+                json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+    except OSError:
+        pass
+    return merged
+
+
+def _build_market_board_soft(as_of: str, *, live: bool | None = None) -> dict[str, Any]:
+    """Best-effort two-market turnover + major indices for the dashboard."""
+    try:
+        from src.market_snapshot import build_market_board
+
+        return build_market_board(as_of=as_of or None, live=live)
+    except Exception as exc:  # noqa: BLE001 — dashboard still renders without it
+        return {
+            "ok": False,
+            "error": str(exc)[:160],
+            "asOf": as_of or None,
+            "live": bool(live),
+            "fetchedAt": datetime.now(SHANGHAI).isoformat(timespec="seconds"),
+            "turnover": {},
+            "indices": [],
+        }
+
+
+def _patch_latest_market_board(
+    *,
+    live: bool = True,
+    with_news: bool = False,
+) -> dict[str, Any]:
+    """Refresh live open-board fields into latest.json without full assemble."""
+    latest_path = OUT_DIR / "latest.json"
+    if not latest_path.exists():
+        return {"ok": False, "error": "no_latest_json"}
+    try:
+        bundle = json.loads(latest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": f"latest_unreadable:{exc}"}
+    if not isinstance(bundle, dict):
+        return {"ok": False, "error": "latest_not_object"}
+
+    data_date = str(bundle.get("dataDate") or "")
+    market_board = _build_market_board_soft(data_date, live=live)
+    static_dir = Path(os.environ.get("ETF68_STATIC_DIR") or (REPO_ROOT / "data" / "static"))
+    citic = bundle.get("citicMonthly")
+    if isinstance(citic, dict) or citic is None:
+        citic = _sync_citic_monthly(
+            citic if isinstance(citic, dict) else None,
+            market_board=market_board,
+            as_of=data_date or datetime.now(SHANGHAI).date().isoformat(),
+            static_dir=static_dir,
+        )
+        bundle["citicMonthly"] = citic
+
+    if with_news:
+        impact_path = REPORTS / f"etf68-impact-events-{data_date}.json"
+        refreshed = _soft_refresh_impact_events(impact_path, as_of=data_date)
+        if refreshed is not None:
+            bundle["impactEvents"] = refreshed
+
+    bundle["marketBoard"] = market_board
+    rows = bundle.get("rows") if isinstance(bundle.get("rows"), list) else []
+    bond_review = _build_bond_review_soft(as_of=data_date, rows=rows)
+    bundle["bondReview"] = bond_review
+    bundle.pop("trendScoreCard", None)
+    # Keep full-generate timestamp; surface live stamp on marketBoard.fetchedAt.
+    try:
+        text = json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
+        latest_path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        return {
+            "ok": False,
+            "error": f"write_failed:{exc}",
+            "marketBoard": market_board,
+            "bondReview": bond_review,
+        }
+
+    return {
+        "ok": True,
+        "dataDate": data_date,
+        "marketBoard": market_board,
+        "bondReview": bond_review,
+        "citicMonthly": bundle.get("citicMonthly"),
+        "impactEvents": bundle.get("impactEvents") if with_news else None,
+        "latestPath": str(latest_path),
+    }
+
+
+def cmd_refresh_board(args: argparse.Namespace) -> int:
+    """Soft-refresh dashboard live fields (indices/turnover[/news]) into latest.json."""
+    try:
+        result = _patch_latest_market_board(
+            live=not bool(getattr(args, "historical", False)),
+            with_news=bool(getattr(args, "with_news", False)),
+        )
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+
+def _build_bond_review_soft(
+    *,
+    as_of: str,
+    rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Best-effort 今日债市收评 for the dashboard."""
+    try:
+        from src.bond_review import build_bond_review
+
+        return build_bond_review(as_of=as_of or None, rows=rows or [])
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "error": str(exc)[:160],
+            "asOf": as_of or None,
+            "fetchedAt": datetime.now(SHANGHAI).isoformat(timespec="seconds"),
+            "rate": {"buckets": []},
+            "credit": {},
+            "summary": "",
+        }
 
 
 def _build_trend_score_from_review(review: dict[str, Any]) -> dict[str, Any]:
@@ -303,6 +458,26 @@ def _read_json(path: Path) -> Any | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _soft_refresh_impact_events(path: Path, *, as_of: str) -> Any | None:
+    """Merge Eastmoney live headlines into existing 实质利好/利空; soft-fail."""
+    payload = _read_json(path)
+    if not isinstance(payload, dict):
+        return payload
+    try:
+        from build_substantive_impact_events import merge_live_into_impact, parse_event_date
+
+        day = parse_event_date(as_of) or datetime.now(SHANGHAI).date()
+        refreshed = merge_live_into_impact(payload, as_of=day)
+        if refreshed is not payload and path.parent.exists():
+            try:
+                path.write_text(json.dumps(refreshed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            except OSError:
+                pass
+        return refreshed
+    except Exception:  # noqa: BLE001
+        return payload
 
 
 def cmd_check_python(_: argparse.Namespace) -> int:
@@ -421,7 +596,13 @@ def _refresh_my_holdings(*, output: Path | None = None) -> dict[str, Any]:
     from src.my_holdings import build_my_holdings, write_my_holdings
 
     out = output or (OUT_DIR / "my-holdings.json")
-    result = build_my_holdings()
+    previous = None
+    if out.exists():
+        try:
+            previous = json.loads(out.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            previous = None
+    result = build_my_holdings(previous=previous)
     write_my_holdings(out, result)
     return {
         "ok": True,
@@ -463,6 +644,17 @@ def cmd_review_script(args: argparse.Namespace) -> int:
             print(json.dumps({"ok": False, "error": f"bundle_missing:{path}"}, ensure_ascii=False))
             return 1
         bundle = json.loads(path.read_text(encoding="utf-8"))
+        # Soft-refresh live headlines so video news is not stale vs. last assemble.
+        day = str(bundle.get("dataDate") or "").strip()
+        if day:
+            impact_path = REPORTS / f"etf68-impact-events-{day}.json"
+            refreshed = _soft_refresh_impact_events(impact_path, as_of=day)
+            if isinstance(refreshed, dict):
+                bundle["impactEvents"] = refreshed
+                try:
+                    path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                except OSError:
+                    pass
 
     result = build_review_script(bundle)
     if args.output:
@@ -751,6 +943,22 @@ def main() -> int:
         help="Output JSON path (default: data/out/my-holdings.json)",
     )
     p_hold.set_defaults(func=cmd_my_holdings)
+
+    p_board = sub.add_parser(
+        "refresh-board",
+        help="Soft-refresh dashboard live market board (indices/turnover) into latest.json",
+    )
+    p_board.add_argument(
+        "--historical",
+        action="store_true",
+        help="Use end-of-day bars for bundle dataDate instead of live tape",
+    )
+    p_board.add_argument(
+        "--with-news",
+        action="store_true",
+        help="Also soft-refresh 实质利好/利空 live headlines",
+    )
+    p_board.set_defaults(func=cmd_refresh_board)
 
     args = ap.parse_args()
     return int(args.func(args))

@@ -35,10 +35,13 @@ npm run render
 npm run validate
 ```
 
-输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，无音轨）。
+输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，静音 AAC 轨 + faststart）。
+
+> Cursor / QuickTime 对无音轨 MP4 常会播约 2 秒就停；渲染后须经 `scripts/remux_previewable.sh` 补静音轨。
 
 ## 说明
 
 - 跨板块曲线/粒子为**视觉示意**，公开源无真实对手方转移矩阵。
-- 「市场离场」= 展示流出 TOP 合计 − 展示流入 TOP 合计。
+- 「市场立场」= 流出 TOP 合计 − 流入 TOP 合计：>0 显示「市场离场」（绿），<0 显示「市场进场」（红），金额取绝对值并随分时更新。
 - 口径：东财分时 `fflow/kline` 的主力净流入累计（亿元）。
+- 东财行业池含多级同名（如「银行」「银行Ⅱ」且净额相同）；冻结时按「词干+净额」去重，保留无后缀/更浅层级。

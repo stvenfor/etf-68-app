@@ -12,6 +12,7 @@ export const FrameSchema = z.object({
   stamp: z.string(),
   outflowTop: z.array(SectorItemSchema),
   inflowTop: z.array(SectorItemSchema),
+  // Signed: >0 市场离场, <0 市场进场（流出TOP合计 − 流入TOP合计）
   marketExitYi: z.number(),
 });
 

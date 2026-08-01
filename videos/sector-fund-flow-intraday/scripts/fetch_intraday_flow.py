@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -16,6 +17,12 @@ from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("Asia/Shanghai")
 EM_UT = "b2884a393a59ad64002292a3e90d46a5"
+# push2.eastmoney.com often drops connections; delay mirror is more stable.
+EM_HOSTS = (
+    "https://push2delay.eastmoney.com",
+    "https://push2.eastmoney.com",
+    "https://82.push2.eastmoney.com",
+)
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Referer": "https://data.eastmoney.com/",
@@ -24,6 +31,21 @@ HEADERS = {
 EXPECTED_MINUTES = 241
 TOP_N = 10
 
+# Eastmoney mixes 一级/二级/三级行业（银行 vs 银行Ⅱ vs …Ⅲ）with identical main-net.
+_LEVEL_SUFFIX_RE = re.compile(r"(Ⅰ|Ⅱ|Ⅲ|Ⅳ|Ⅴ|III|II|IV|IX|VI{0,3}|I)$")
+_LEVEL_ORDER = {
+    "": 0,
+    "Ⅰ": 1,
+    "I": 1,
+    "Ⅱ": 2,
+    "II": 2,
+    "Ⅲ": 3,
+    "III": 3,
+    "Ⅳ": 4,
+    "IV": 4,
+    "Ⅴ": 5,
+    "V": 5,
+}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -52,16 +74,45 @@ def clear_proxy_env() -> None:
     __import__("os").environ["no_proxy"] = "*"
 
 
-def get_json(url: str, retries: int = 4) -> dict:
+def get_json(url: str, retries: int = 8) -> dict:
+    """GET JSON; if URL uses push2 host, rotate EM_HOSTS on failure."""
     last: Exception | None = None
+    candidates = [url]
+    for host in EM_HOSTS:
+        if "eastmoney.com/api/" in url and host not in url:
+            # swap host prefix
+            for old in EM_HOSTS:
+                if old in url:
+                    candidates.append(url.replace(old, host))
+                    break
+            else:
+                # absolute path after domain
+                idx = url.find("/api/")
+                if idx > 0:
+                    candidates.append(host + url[idx:])
+    # de-dupe preserve order
+    seen: set[str] = set()
+    urls: list[str] = []
+    for u in candidates:
+        if u not in seen:
+            seen.add(u)
+            urls.append(u)
+
     for attempt in range(retries):
+        target = urls[attempt % len(urls)]
         try:
-            req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=45) as resp:
+            req = urllib.request.Request(target, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            json.JSONDecodeError,
+            ConnectionError,
+            OSError,
+        ) as exc:
             last = exc
-            time.sleep(0.4 * (attempt + 1))
+            time.sleep(0.6 * (attempt + 1) + (attempt * 0.2))
     raise RuntimeError(f"GET failed after {retries} tries: {url}: {last}")
 
 
@@ -102,6 +153,54 @@ def finite(value: object, label: str) -> float:
     return number
 
 
+def industry_stem(name: str) -> str:
+    """Strip Eastmoney level suffixes: 银行Ⅱ → 银行, 国有大型银行Ⅲ → 国有大型银行."""
+    return _LEVEL_SUFFIX_RE.sub("", name.strip()).strip()
+
+
+def _level_rank(name: str) -> int:
+    stem = industry_stem(name)
+    if name == stem:
+        return 0
+    return _LEVEL_ORDER.get(name[len(stem) :], 9)
+
+
+def prefer_industry_row(
+    left: tuple[str, str, float],
+    right: tuple[str, str, float],
+) -> tuple[str, str, float]:
+    """Prefer unsuffixed / shallower level / shorter name / smaller code."""
+    _, left_name, _ = left
+    _, right_name, _ = right
+    left_key = (_level_rank(left_name), len(left_name), left[0])
+    right_key = (_level_rank(right_name), len(right_name), right[0])
+    return left if left_key <= right_key else right
+
+
+def dedupe_hierarchical_nets(
+    rows: list[tuple[str, str, float]],
+    *,
+    net_decimals: int = 2,
+) -> list[tuple[str, str, float]]:
+    """
+    Drop multi-level industry clones that share the same stem + net.
+
+    Eastmoney's industry clist mixes 一级/二级/三级 boards (e.g. 银行 + 银行Ⅱ)
+    with identical主力净流入; ranking should keep only one.
+    """
+    winners: dict[tuple[str, int], tuple[str, str, float]] = {}
+    order: list[tuple[str, int]] = []
+    for row in rows:
+        code, name, net = row
+        key = (industry_stem(name), round(net, net_decimals))
+        if key not in winners:
+            winners[key] = row
+            order.append(key)
+            continue
+        winners[key] = prefer_industry_row(winners[key], row)
+    return [winners[key] for key in order]
+
+
 def fetch_boards(fs: str, min_boards: int) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for pn in range(1, 20):
@@ -118,7 +217,7 @@ def fetch_boards(fs: str, min_boards: int) -> list[dict[str, object]]:
             "ut": EM_UT,
             "_": str(int(time.time() * 1000)),
         })
-        payload = get_json(f"https://push2.eastmoney.com/api/qt/clist/get?{query}")
+        payload = get_json(f"{EM_HOSTS[0]}/api/qt/clist/get?{query}")
         diff = (payload.get("data") or {}).get("diff") or []
         items = diff if isinstance(diff, list) else list(diff.values())
         if not items:
@@ -145,6 +244,13 @@ def fetch_boards(fs: str, min_boards: int) -> list[dict[str, object]]:
     for row in rows:
         by_code[str(row["code"])] = row
     unique = list(by_code.values())
+    # Drop 银行/银行Ⅱ style clones with identical main-net.
+    as_tuples = [
+        (str(r["code"]), str(r["name"]), float(r["mainNetYuan"]) / 1e8)
+        for r in unique
+    ]
+    kept_codes = {code for code, _, _ in dedupe_hierarchical_nets(as_tuples)}
+    unique = [r for r in unique if str(r["code"]) in kept_codes]
     if len(unique) < min_boards:
         raise RuntimeError(f"Expected at least {min_boards} boards, got {len(unique)}")
     return unique
@@ -160,7 +266,7 @@ def fetch_fflow_klines(code: str) -> list[tuple[str, float]]:
         "ut": EM_UT,
         "_": str(int(time.time() * 1000)),
     })
-    payload = get_json(f"https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?{query}")
+    payload = get_json(f"{EM_HOSTS[0]}/api/qt/stock/fflow/kline/get?{query}")
     klines = (payload.get("data") or {}).get("klines") or []
     series: list[tuple[str, float]] = []
     for line in klines:
@@ -244,11 +350,13 @@ def build_frames(
                 net_yi = yuan_to_yi(path[max(prior)]) if prior else 0.0
             nets.append((code, name, net_yi))
 
+        nets = dedupe_hierarchical_nets(nets)
         outflow = sorted((row for row in nets if row[2] < 0), key=lambda r: (r[2], r[1]))[:top_n]
         inflow = sorted((row for row in nets if row[2] > 0), key=lambda r: (-r[2], r[1]))[:top_n]
         out_sum = abs(sum(r[2] for r in outflow))
         in_sum = sum(r[2] for r in inflow)
-        market_exit = round(max(0.0, out_sum - in_sum), 4)
+        # Signed: >0 市场离场, <0 市场进场
+        market_exit = round(out_sum - in_sum, 4)
         frames.append({
             "time": hhmm,
             "stamp": stamp,
@@ -301,10 +409,22 @@ def main() -> None:
     selected = list(selected_map.values())
 
     series_by_code: dict[str, dict[str, float]] = {}
-    for board in selected:
+    for idx, board in enumerate(selected):
         code = str(board["code"])
-        points = fetch_fflow_klines(code)
-        series_by_code[code] = {stamp: value for stamp, value in points}
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                points = fetch_fflow_klines(code)
+                series_by_code[code] = {stamp: value for stamp, value in points}
+                last_err = None
+                break
+            except Exception as exc:  # noqa: BLE001 — transient Eastmoney disconnects
+                last_err = exc
+                time.sleep(1.2 * (attempt + 1))
+        if last_err is not None:
+            raise RuntimeError(f"fflow kline failed for {code}: {last_err}") from last_err
+        if (idx + 1) % 5 == 0:
+            print(f"fetched klines {idx + 1}/{len(selected)}", flush=True)
         time.sleep(args.sleep)
 
     frames = build_frames(

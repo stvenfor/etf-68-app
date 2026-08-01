@@ -347,9 +347,18 @@ def seed_universe() -> list[dict[str, Any]]:
     return out
 
 
-def build_my_holdings(*, fetch: FetchFn = _default_fetch) -> dict[str, Any]:
+def build_my_holdings(
+    *,
+    fetch: FetchFn = _default_fetch,
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     universe = seed_universe()
-    valued = apply_position_advice(enrich_nav(universe, fetch=fetch))
+    prev_by: dict[str, dict[str, Any]] = {}
+    if previous and isinstance(previous.get("rows"), list):
+        for r in previous["rows"]:
+            if isinstance(r, dict) and r.get("code"):
+                prev_by[str(r["code"]).zfill(6)] = r
+    valued = apply_position_advice(enrich_nav(universe, fetch=fetch, previous_by_code=prev_by))
     counts = {k: 0 for k in CATEGORY_ORDER}
     advice_counts: dict[str, int] = {}
     for row in valued:

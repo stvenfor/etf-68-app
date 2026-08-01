@@ -12,13 +12,16 @@ import re
 from datetime import datetime
 from typing import Any, Callable, Optional
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 from .fund_advice import FRAMEWORK as ADVICE_FRAMEWORK
 from .fund_advice import apply_fund_advice
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+# Local HTTP(S)_PROXY often points at a dead client; fund hosts need direct egress.
+_DIRECT = build_opener(ProxyHandler({}))
 
 QUOTA: dict[str, int] = {
     "equity": 4,
@@ -83,7 +86,7 @@ def _default_fetch(url: str, *, timeout: float = 30.0) -> str:
             "Accept": "*/*",
         },
     )
-    with urlopen(req, timeout=timeout) as resp:  # noqa: S310 — public market data
+    with _DIRECT.open(req, timeout=timeout) as resp:  # noqa: S310 — public market data
         raw = resp.read()
     if "sinajs.cn" in url:
         return raw.decode("gb18030", "replace")
@@ -349,6 +352,87 @@ def parse_sina_fund_quote(body: str, code: str) -> dict[str, Any]:
     }
 
 
+# Sina fu_ clock often freezes after close (15:00–16:04). Product rule:
+# show valuation at most as of 14:50:00, and freeze estimate *values* the same way
+# when the quote/local clock is past 14:50 (prefer prior same-day ≤14:50 snapshot).
+ESTIMATE_DISPLAY_CUTOFF_HM = (14, 50)
+
+
+def _parse_estimate_dt(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    text = str(raw).strip()
+    # Drop trailing " · …" annotations if present.
+    text = text.split("·", 1)[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:19] if len(text) >= 19 else text, fmt).replace(tzinfo=SHANGHAI)
+        except ValueError:
+            continue
+    m = re.search(r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)", str(raw))
+    if m:
+        return _parse_estimate_dt(f"{m.group(1)} {m.group(2)}")
+    tm = re.fullmatch(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", text)
+    if tm:
+        now = datetime.now(SHANGHAI)
+        sec = int(tm.group(3) or 0)
+        return now.replace(hour=int(tm.group(1)), minute=int(tm.group(2)), second=sec, microsecond=0)
+    return None
+
+
+def _hm_tuple(dt: datetime) -> tuple[int, int]:
+    return (dt.hour, dt.minute)
+
+
+def _past_estimate_cutoff(dt: datetime) -> bool:
+    return _hm_tuple(dt) > ESTIMATE_DISPLAY_CUTOFF_HM
+
+
+def format_estimate_time_only(raw: str | None, *, fallback: datetime | None = None) -> str:
+    """Return ``YYYY-MM-DD HH:MM:SS`` only; clock capped at 14:50:00."""
+    dt = _parse_estimate_dt(raw) or fallback or datetime.now(SHANGHAI)
+    cut_h, cut_m = ESTIMATE_DISPLAY_CUTOFF_HM
+    if _past_estimate_cutoff(dt):
+        return f"{dt.date().isoformat()} {cut_h:02d}:{cut_m:02d}:00"
+    return f"{dt.date().isoformat()} {dt.hour:02d}:{dt.minute:02d}:{dt.second:02d}"
+
+
+def cap_estimate_clock_for_display(raw: str | None) -> str | None:
+    """Cap timestamp at 14:50:00; always prefer full ``YYYY-MM-DD HH:MM:SS``."""
+    if not raw:
+        return raw
+    return format_estimate_time_only(raw)
+
+
+def _should_freeze_at_1450(quote_raw: str | None, *, now: datetime) -> bool:
+    quote_dt = _parse_estimate_dt(quote_raw)
+    if quote_dt is not None and _past_estimate_cutoff(quote_dt):
+        return True
+    if quote_dt is not None and quote_dt.date() == now.date() and _past_estimate_cutoff(now):
+        return True
+    if quote_dt is None and _past_estimate_cutoff(now):
+        return True
+    return False
+
+
+def _prev_usable_1450_snapshot(prev: dict[str, Any] | None, *, day: str) -> dict[str, Any] | None:
+    """Reuse prior same-day estimate when freezing at 14:50.
+
+    Prefer a snapshot whose quote clock is ≤14:50; also accept an already
+    frozen ``… 14:50:00`` row from a later pull.
+    """
+    if not prev or prev.get("estimateNav") is None:
+        return None
+    raw = prev.get("estimateQuoteTime") or prev.get("estimateTime")
+    dt = _parse_estimate_dt(str(raw) if raw else None)
+    if dt is None or dt.date().isoformat() != day:
+        return None
+    display = str(prev.get("estimateTime") or "")
+    if _past_estimate_cutoff(dt) and "14:50:00" not in display:
+        return None
+    return prev
+
+
 def _date_le(a: Optional[str], b: Optional[str]) -> bool:
     """True if a and b look like YYYY-MM-DD and a < b."""
     if not a or not b or len(a) < 10 or len(b) < 10:
@@ -393,28 +477,28 @@ def fetch_sina_estimates(
 def _apply_published_as_estimate(item: dict[str, Any]) -> None:
     """When no usable intraday valuation, mirror published NAV day-change.
 
-    Stamp estimateTime with the refresh clock so UI「估值时间」reflects this pull,
-    while still marking that the value is published NAV (not live estimate).
+    「估值时间」只保留完整日期时间（超过 14:50 记为 14:50:00），无刷新后缀。
     """
     if item.get("nav") is None:
         return
     item["estimateNav"] = item.get("nav")
     item["estimateChangePct"] = item.get("dayChangePct")
     item["estimateChange"] = None
-    now = datetime.now(SHANGHAI).strftime("%Y-%m-%d %H:%M:%S")
-    if item.get("navDate"):
-        item["estimateTime"] = f"{now} · 净值日{item['navDate']}已公布"
-    else:
-        item["estimateTime"] = f"{now} · 已公布·无盘中估值"
+    now = datetime.now(SHANGHAI)
+    item["estimateTime"] = format_estimate_time_only(None, fallback=now)
+    item["refreshedAt"] = now.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def enrich_nav(
     rows: list[dict[str, Any]],
     *,
     fetch: FetchFn = _default_fetch,
+    previous_by_code: Optional[dict[str, dict[str, Any]]] = None,
 ) -> list[dict[str, Any]]:
     codes = [str(r.get("code") or "").zfill(6) for r in rows if r.get("code")]
     estimates = fetch_sina_estimates(codes, fetch=fetch)
+    prev_map = previous_by_code or {}
+    now = datetime.now(SHANGHAI)
     out: list[dict[str, Any]] = []
     for row in rows:
         item = dict(row)
@@ -434,16 +518,30 @@ def enrich_nav(
         est = estimates.get(code)
         # Stale estimate (common for QDII / missing fu_): fall back to published.
         stale = bool(est and _date_le(est.get("estimateDate"), item.get("navDate")))
+        pulled_at = now.strftime("%Y-%m-%d %H:%M:%S")
         if est and est.get("estimateNav") is not None and not stale:
-            item["estimateNav"] = est["estimateNav"]
-            if est.get("estimateChange") is not None:
-                item["estimateChange"] = est["estimateChange"]
-            if est.get("estimateChangePct") is not None:
-                item["estimateChangePct"] = est["estimateChangePct"]
-            if est.get("estimateTime"):
-                item["estimateTime"] = est["estimateTime"]
-            elif est.get("estimateDate"):
-                item["estimateTime"] = est["estimateDate"]
+            quote_time = est.get("estimateTime") or est.get("estimateDate")
+            item["estimateQuoteTime"] = quote_time
+            freeze = _should_freeze_at_1450(str(quote_time) if quote_time else None, now=now)
+            quote_dt = _parse_estimate_dt(str(quote_time) if quote_time else None) or now
+            day = quote_dt.date().isoformat()
+            snap = _prev_usable_1450_snapshot(prev_map.get(code), day=day) if freeze else None
+            if snap is not None:
+                item["estimateNav"] = snap.get("estimateNav")
+                item["estimateChange"] = snap.get("estimateChange")
+                item["estimateChangePct"] = snap.get("estimateChangePct")
+            else:
+                item["estimateNav"] = est["estimateNav"]
+                if est.get("estimateChange") is not None:
+                    item["estimateChange"] = est["estimateChange"]
+                if est.get("estimateChangePct") is not None:
+                    item["estimateChangePct"] = est["estimateChangePct"]
+            # Display: date+time only; past cutoff → 14:50:00 (values follow freeze above).
+            item["estimateTime"] = format_estimate_time_only(
+                str(quote_time) if quote_time else None,
+                fallback=now,
+            )
+            item["refreshedAt"] = pulled_at
         else:
             _apply_published_as_estimate(item)
         out.append(item)
@@ -484,6 +582,7 @@ def load_cached_universe(path_data: dict[str, Any]) -> list[dict[str, Any]]:
                 "estimateChange": _num(row.get("estimateChange")),
                 "estimateChangePct": _num(row.get("estimateChangePct")),
                 "estimateTime": row.get("estimateTime"),
+                "estimateQuoteTime": row.get("estimateQuoteTime"),
                 "rankInCategory": row.get("rankInCategory"),
             }
         )
@@ -502,7 +601,13 @@ def build_funds_top30(
     else:
         universe = load_cached_universe(previous)
 
-    valued = apply_fund_advice(enrich_nav(universe, fetch=fetch))
+    prev_by: dict[str, dict[str, Any]] = {}
+    if previous and isinstance(previous.get("rows"), list):
+        for r in previous["rows"]:
+            if isinstance(r, dict) and r.get("code"):
+                prev_by[str(r["code"]).zfill(6)] = r
+
+    valued = apply_fund_advice(enrich_nav(universe, fetch=fetch, previous_by_code=prev_by))
     counts = {k: 0 for k in QUOTA}
     advice_counts: dict[str, int] = {}
     for row in valued:

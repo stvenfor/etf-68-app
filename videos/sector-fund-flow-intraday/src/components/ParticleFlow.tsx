@@ -6,7 +6,7 @@ import type {FlowFrame} from '../data/schema';
  * Layout contract (px):
  * - side inset 48 (unified L/R)
  * - top safe 72 + header shift 30; bottom safe 80 + footer lift 70
- * - line-to-list gap ~8
+ * - line-to-list gap ~8; color bars fixed 5px from endpoints
  * - reservoir mid-panel among side lists; panelTop shifted +50
  * - multi-curve per sector endpoint (2–5 by weight/rank)
  */
@@ -180,10 +180,11 @@ function particleColor(kind: PathKind, t: number): string {
   const green = '#9AFFB5';
   const red = '#ff5a5a';
   const gray = '#d8d8d8';
-  if (kind === 'toPool') {
-    return t < 0.65 ? green : lerpColor(green, gray, (t - 0.65) / 0.35);
-  }
-  return t < 0.2 ? lerpColor(gray, red, t / 0.2) : red;
+  // Same fade shape on both sides; only hue differs.
+  // toPool: sector→pool ; fromPool: pool→sector (t flipped for matching look)
+  const along = kind === 'toPool' ? t : 1 - t;
+  const solid = kind === 'toPool' ? green : red;
+  return along < 0.65 ? solid : lerpColor(solid, gray, (along - 0.65) / 0.35);
 }
 
 export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = ({
@@ -207,26 +208,19 @@ export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = 
     }> = [];
 
     paths.forEach((path, pathIndex) => {
-      const boost = path.kind === 'fromPool' ? 1.55 : 1;
-      const count = Math.max(
-        path.kind === 'fromPool' ? 3 : 2,
-        Math.min(10, Math.round((1.5 + path.weight * 0.1) * boost)),
-      );
+      const count = Math.max(2, Math.min(10, Math.round(1.5 + path.weight * 0.1)));
       for (let i = 0; i < count; i++) {
         const r0 = hash01(pathIndex * 97 + i * 13 + Math.floor(progress * 1000));
-        const speed =
-          (path.kind === 'fromPool' ? 0.0042 : 0.0035) +
-          r0 * 0.0055 +
-          Math.min(0.004, path.weight * 0.000015);
+        const speed = 0.0035 + r0 * 0.0055 + Math.min(0.004, path.weight * 0.000015);
         const t = (r0 + tBase * speed * 60) % 1;
         const pt = bezier(path.from, path.c1, path.c2, path.to, t);
         result.push({
           key: `${path.id}-${i}`,
           x: pt.x,
           y: pt.y,
-          r: (path.kind === 'fromPool' ? 2.1 : 1.6) + r0 * 2.4,
+          r: 1.6 + r0 * 2.4,
           color: particleColor(path.kind, t),
-          opacity: path.kind === 'fromPool' ? 0.55 + r0 * 0.4 : 0.42 + r0 * 0.4,
+          opacity: 0.42 + r0 * 0.4,
         });
       }
     });
@@ -254,31 +248,15 @@ export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = 
       viewBox={`0 0 ${width} ${height}`}
       style={{position: 'absolute', left: 0, top: 0, width, height, pointerEvents: 'none'}}
     >
-      {paths
-        .filter((p) => p.kind === 'fromPool')
-        .map((path) => (
-          <path
-            key={`${path.id}-glow`}
-            d={path.d}
-            fill="none"
-            stroke="rgba(255,90,90,0.18)"
-            strokeWidth={Math.max(5, Math.min(11, 4 + path.weight * 0.1))}
-            strokeLinecap="round"
-          />
-        ))}
       {paths.map((path) => (
         <path
           key={path.id}
           d={path.d}
           fill="none"
           stroke={
-            path.kind === 'toPool' ? 'rgba(154,255,181,0.42)' : 'rgba(255,90,90,0.62)'
+            path.kind === 'toPool' ? 'rgba(154,255,181,0.42)' : 'rgba(255,90,90,0.42)'
           }
-          strokeWidth={
-            path.kind === 'fromPool'
-              ? Math.max(1.8, Math.min(5, 1.6 + path.weight * 0.07))
-              : Math.max(1.2, Math.min(3.6, 1 + path.weight * 0.04))
-          }
+          strokeWidth={Math.max(1.2, Math.min(3.6, 1 + path.weight * 0.04))}
           strokeLinecap="round"
         />
       ))}

@@ -20,14 +20,49 @@ import {
   uniqSorted,
 } from "./filters";
 import DashboardBoard from "./dashboard/DashboardBoard";
+import EventMatrixPanel from "./EventMatrixPanel";
 import FundsTop30Panel from "./FundsTop30Panel";
 import HoldingsPanel from "./HoldingsPanel";
 import { buildDailyNarration } from "./narration";
 import type { UiBundle } from "./types";
 
+/** Shanghai session: denser poll; off-hours slower. */
+function boardPollMs(now = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
+  const wd = get("weekday");
+  if (wd === "Sat" || wd === "Sun") return 120_000;
+  const hh = Number(get("hour"));
+  const mm = Number(get("minute"));
+  const mins = hh * 60 + mm;
+  // 09:15–11:35 / 12:55–15:05
+  const am = mins >= 9 * 60 + 15 && mins <= 11 * 60 + 35;
+  const pm = mins >= 12 * 60 + 55 && mins <= 15 * 60 + 5;
+  return am || pm ? 20_000 : 90_000;
+}
+
 function pctClass(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v) || v === 0) return "num";
   return v > 0 ? "num pos" : "num neg";
+}
+
+function stanceFromLots(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  if (v > 0) return "净加多";
+  if (v < 0) return "净加空";
+  return "平";
+}
+
+function stanceTone(stance: string | null | undefined): string {
+  if (stance === "净加多") return "good";
+  if (stance === "净加空") return "bad";
+  return "";
 }
 
 function actionTone(action: string): string {
@@ -66,12 +101,15 @@ export default function App() {
   const [status, setStatus] = useState("加载中…");
   const [logs, setLogs] = useState<string[]>([]);
   const [pyInfo, setPyInfo] = useState<string>("");
-  const [eventId, setEventId] = useState("全部");
   const [impactSector, setImpactSector] = useState("全部");
   const [impactSide, setImpactSide] = useState("全部");
   const [citicMonth, setCiticMonth] = useState<number | "全部">("全部");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakGenRef = useRef(0);
+  const boardRefreshBusy = useRef(false);
+  const boardNewsTick = useRef(0);
+  const [boardLiveAt, setBoardLiveAt] = useState<string | null>(null);
+  const [boardRefreshing, setBoardRefreshing] = useState(false);
 
   useEffect(() => {
     const off = window.etf68?.onGenerateLog?.((line) => {
@@ -84,12 +122,14 @@ export default function App() {
       const loaded = await window.etf68.loadLatest();
       if (loaded.ok && loaded.bundle) {
         setBundle(loaded.bundle);
+        setBoardLiveAt(loaded.bundle.marketBoard?.fetchedAt || null);
         setStatus(`已加载 ${loaded.bundle.dataDate}`);
         return;
       }
       const assembled = await window.etf68.assembleLatest({});
       if (assembled.ok && assembled.bundle) {
         setBundle(assembled.bundle);
+        setBoardLiveAt(assembled.bundle.marketBoard?.fetchedAt || null);
         setStatus(`已组装 ${assembled.bundle.dataDate}`);
         return;
       }
@@ -103,6 +143,52 @@ export default function App() {
       }
     };
   }, []);
+
+  /** 数据看板：盘中实时拉指数/成交，定期附带新闻 soft-refresh */
+  useEffect(() => {
+    if (tab !== "board" || !window.etf68?.refreshBoard) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async (withNews: boolean) => {
+      if (cancelled || boardRefreshBusy.current || busy) return;
+      boardRefreshBusy.current = true;
+      setBoardRefreshing(true);
+      try {
+        const res = await window.etf68.refreshBoard({ withNews });
+        if (cancelled) return;
+        if (res.ok && res.bundle) {
+          setBundle(res.bundle);
+          setBoardLiveAt(res.fetchedAt || res.bundle.marketBoard?.fetchedAt || null);
+        }
+      } catch {
+        /* soft-fail: keep last board */
+      } finally {
+        boardRefreshBusy.current = false;
+        if (!cancelled) setBoardRefreshing(false);
+      }
+    };
+
+    const schedule = () => {
+      timer = setTimeout(async () => {
+        boardNewsTick.current += 1;
+        const withNews = boardNewsTick.current % 6 === 0; // ~每 6 次轮询刷一次新闻
+        await tick(withNews);
+        if (!cancelled) schedule();
+      }, boardPollMs());
+    };
+
+    // 进入看板立即刷一次
+    void tick(false).then(() => {
+      if (!cancelled) schedule();
+    });
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [tab, busy]);
 
   const filtered = useMemo(() => (bundle ? filterRows(bundle.rows, filters) : []), [bundle, filters]);
 
@@ -120,6 +206,20 @@ export default function App() {
       kdjMacdRef: uniqSorted(rows.map((r) => r.kdjMacdRef)),
     };
   }, [bundle]);
+
+  /** 多空数据：月份与日行均按时间降序（最新在上） */
+  const citicMonthsDesc = useMemo(() => {
+    const months = bundle?.citicMonthly?.months || [];
+    return [...months].sort((a, b) => (b.month || 0) - (a.month || 0));
+  }, [bundle]);
+
+  const citicDaysDesc = useMemo(() => {
+    return citicMonthsDesc
+      .filter((m) => citicMonth === "全部" || m.month === citicMonth)
+      .flatMap((m) => m.days || [])
+      .slice()
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  }, [citicMonthsDesc, citicMonth]);
 
   async function onGenerate() {
     setBusy(true);
@@ -204,8 +304,6 @@ export default function App() {
 
   const counts = bundle?.counts?.byAction || {};
   const impactRows = bundle?.impactEvents?.rows || [];
-  const matrixEvents = bundle?.eventMatrix?.events || [];
-  const selectedEvent = matrixEvents.find((e) => e.id === eventId) || matrixEvents[0];
 
   return (
     <div className={`app ${tab === "board" ? "is-board" : ""}`}>
@@ -286,7 +384,34 @@ export default function App() {
           <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>
         )}
 
-        {bundle && tab === "board" && <DashboardBoard bundle={bundle} />}
+        {bundle && tab === "board" && (
+          <DashboardBoard
+            bundle={bundle}
+            liveAt={boardLiveAt || bundle.marketBoard?.fetchedAt || null}
+            refreshing={boardRefreshing}
+            onRefresh={() => {
+              if (boardRefreshBusy.current || !window.etf68?.refreshBoard) return;
+              boardRefreshBusy.current = true;
+              setBoardRefreshing(true);
+              window.etf68
+                .refreshBoard({ withNews: true })
+                .then((res) => {
+                  if (res.ok && res.bundle) {
+                    setBundle(res.bundle);
+                    setBoardLiveAt(res.fetchedAt || res.bundle.marketBoard?.fetchedAt || null);
+                    setStatus(`看板已刷新 ${res.fetchedAt?.slice(11, 19) || ""}`);
+                  } else {
+                    setStatus(res.error || "看板刷新失败");
+                  }
+                })
+                .catch((err) => setStatus(String(err)))
+                .finally(() => {
+                  boardRefreshBusy.current = false;
+                  setBoardRefreshing(false);
+                });
+            }}
+          />
+        )}
 
         {bundle && tab === "delivery" && (
           <div className="panel">
@@ -359,7 +484,10 @@ export default function App() {
 
         {bundle && tab === "citic" && (
           <div className="panel">
-            <h2>中信期货净持仓（月内逐日）</h2>
+            <h2>股指期货多空（中信 / 其它机构 / 总体）</h2>
+            <p className="meta" style={{ marginTop: -4, marginBottom: 10 }}>
+              单位：手。中信 = 中信期货(代客)四品种净增仓合计；总体 = 中金所排名会员当日净增仓合计；其它机构 = 总体 − 中信。
+            </p>
             {!bundle.citicMonthly?.months?.length ? (
               <div className="empty">缺少中信月度数据（data/static/citic-monthly-daily-2026.json）。</div>
             ) : (
@@ -372,7 +500,7 @@ export default function App() {
                     }
                   >
                     <option value="全部">月份：全部</option>
-                    {bundle.citicMonthly.months.map((m) => (
+                    {citicMonthsDesc.map((m) => (
                       <option key={m.month} value={m.month}>
                         {m.label || `${m.month}月`}
                       </option>
@@ -384,8 +512,18 @@ export default function App() {
                     <thead>
                       <tr>
                         <th>日期</th>
-                        <th className="num">净持仓合计</th>
-                        <th>立场</th>
+                        <th className="num" title="中信期货(代客) · IH+IF+IC+IM">
+                          中信合计
+                        </th>
+                        <th>中信立场</th>
+                        <th className="num" title="总体合计 − 中信合计">
+                          其它机构合计
+                        </th>
+                        <th>其它立场</th>
+                        <th className="num" title="中金所排名会员当日净增仓合计">
+                          总体合计
+                        </th>
+                        <th>总体立场</th>
                         <th className="num">上证%</th>
                         <th className="num">深证%</th>
                         <th className="num">创业板%</th>
@@ -394,25 +532,32 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bundle.citicMonthly.months
-                        .filter((m) => citicMonth === "全部" || m.month === citicMonth)
-                        .flatMap((m) => m.days || [])
-                        .map((d) => (
-                          <tr key={d.date}>
-                            <td>{d.date}</td>
-                            <td className="num">{d.citicTotal ?? "—"}</td>
-                            <td>
-                              <span className={`pill ${d.stance === "净加多" ? "good" : d.stance === "净加空" ? "bad" : ""}`}>
-                                {d.stance || "—"}
-                              </span>
-                            </td>
-                            <td className={pctClass(d.shPct)}>{fmtPct(d.shPct)}</td>
-                            <td className={pctClass(d.szPct)}>{fmtPct(d.szPct)}</td>
-                            <td className={pctClass(d.cybPct)}>{fmtPct(d.cybPct)}</td>
-                            <td className={pctClass(d.kcbPct)}>{fmtPct(d.kcbPct)}</td>
-                            <td>{d.label || "—"}</td>
-                          </tr>
-                        ))}
+                      {citicDaysDesc.map((d) => {
+                          const otherStance = d.otherStance || stanceFromLots(d.otherTotal);
+                          const grandStance = d.grandStance || stanceFromLots(d.grandTotal);
+                          return (
+                            <tr key={d.date}>
+                              <td>{d.date}</td>
+                              <td className={pctClass(d.citicTotal)}>{fmtLots(d.citicTotal)}</td>
+                              <td>
+                                <span className={`pill ${stanceTone(d.stance)}`}>{d.stance || "—"}</span>
+                              </td>
+                              <td className={pctClass(d.otherTotal)}>{fmtLots(d.otherTotal)}</td>
+                              <td>
+                                <span className={`pill ${stanceTone(otherStance)}`}>{otherStance}</span>
+                              </td>
+                              <td className={pctClass(d.grandTotal)}>{fmtLots(d.grandTotal)}</td>
+                              <td>
+                                <span className={`pill ${stanceTone(grandStance)}`}>{grandStance}</span>
+                              </td>
+                              <td className={pctClass(d.shPct)}>{fmtPct(d.shPct)}</td>
+                              <td className={pctClass(d.szPct)}>{fmtPct(d.szPct)}</td>
+                              <td className={pctClass(d.cybPct)}>{fmtPct(d.cybPct)}</td>
+                              <td className={pctClass(d.kcbPct)}>{fmtPct(d.kcbPct)}</td>
+                              <td>{d.label || "—"}</td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -421,67 +566,14 @@ export default function App() {
           </div>
         )}
 
-        {bundle && tab === "events" && (
-          <div className="panel">
-            <h2>事件 → ETF 利好/利空</h2>
-            {!matrixEvents.length ? (
-              <div className="empty">缺少事件矩阵（生成流水线会写入）。</div>
-            ) : (
-              <>
-                <div className="filters">
-                  <select
-                    value={eventId === "全部" ? selectedEvent?.id || "" : eventId}
-                    onChange={(e) => setEventId(e.target.value)}
-                  >
-                    {matrixEvents.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.date} · {e.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>代码</th>
-                        <th>名称</th>
-                        <th>板块</th>
-                        <th>方向</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(selectedEvent?.etfs || []).map((e) => (
-                        <tr key={`${selectedEvent?.id}-${e.code}`}>
-                          <td>{e.code}</td>
-                          <td>{e.name}</td>
-                          <td>{e.sector || "—"}</td>
-                          <td>
-                            <span
-                              className={`pill ${
-                                String(e.direction).includes("利好")
-                                  ? "good"
-                                  : String(e.direction).includes("利空")
-                                    ? "bad"
-                                    : "warn"
-                              }`}
-                            >
-                              {e.direction}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        {bundle && tab === "events" && <EventMatrixPanel matrix={bundle.eventMatrix} />}
 
         {bundle && tab === "impact" && (
           <div className="panel">
             <h2>实质利好 / 利空</h2>
+            <p className="meta" style={{ marginTop: -4, marginBottom: 10 }}>
+              组装时自动接入东财 7×24 / 要闻；当日资讯优先展示，未收盘项标注「待价格确认」。
+            </p>
             {!impactRows.length ? (
               <div className="empty">缺少实质事件数据。</div>
             ) : (

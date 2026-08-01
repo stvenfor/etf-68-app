@@ -38,12 +38,20 @@ python3.12 build_composition.py
 
 要点：
 
-- 按章合成 VO（Edge 晓晓，**分句语气** `prosody_v2`：涨/跌调速调调 + 句间短停顿）；文案未变且 marker 匹配可复用缓存，改口播或语气版本会重合成
-- **不要**为赶时长硬裁剪 VO；软预算仅作参考
-- 写入封面时长 `COVER_S`、水印、双语字幕、章节进度条、分章 GSAP 动效（行 spotlight / 数字 count-up，无 `back.out`）
+- 按章合成 VO（Edge 晓晓，**分句语气** + **atempo 1.2×** 统一提速；文案/语气版本未变可复用缓存）
+- **不要**为赶时长硬裁剪 VO；软预算仅作参考；消息章口播完整标题
+- 写入封面时长 `COVER_S`、水印、双语字幕、章节进度条、分章 GSAP 动效（板块行提前口播约 0.5s）
 - 章节过渡 + 指标击中 SFX：`assets/sfx/{whoosh,tick,pop,chime}.mp3`（收束用 chime）
-- 默认可同时写出竖屏工程：`~/Desktop/work/videos/etf68-daily-review-portrait/`（**1080×1920 / 9:16**，手机安全区 + 卡片式布局，assets 软链）
-  - 渲染：`cd …/etf68-daily-review-portrait && npx hyperframes@0.7.71 render -o out/…-portrait.mp4`
+- 默认可同时写出竖屏工程：`~/Desktop/work/videos/etf68-daily-review-portrait/`（构图基准 **1080×1920 / 9:16**，手机安全区 + 卡片式布局，assets 软链）
+  - **成片只导出 2K（1440×2560）**，**禁止**再走 `portrait-4k` / 生成 4K 中间文件：  
+    `cd …/etf68-daily-review-portrait && npx hyperframes@0.7.71 render --quality high --video-bitrate 16M --resolution portrait -o out/etf68-daily-review-portrait.mp4`  
+    再拉成 2K（须强制码率；**必须** `-movflags +faststart`）：  
+    `ffmpeg -y -i out/etf68-daily-review-portrait.mp4 -vf scale=1440:2560:flags=lanczos -c:v libx264 -b:v 16M -minrate 16M -maxrate 16M -bufsize 16M -x264-params \"nal-hrd=cbr:force-cfr=1:aq-mode=3:aq-strength=1.3\" -preset slow -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ~/Desktop/ETF68-市场复盘-{day}-竖版.mp4`  
+    （HyperFrames 无 1440 预设，只能 1080 / 4K；为避免 4K，用高码率 1080 渲染后再 scale 到 2K。）
+  - 竖版左右边距 `--pad-x: 112px`：适配 iPhone 全屏裁切（机身比 9:16 更高，左右约裁 9%）
+  - 竖版可读性：顶栏约 20–22px、免责声明 18px、字幕中/英约 31/20（**上中下英**，英文字幕不得回落成中文）；章节内容字号相对基准 ×1.3；实质消息行文字约 **29px**；利好/利空标题栏需突出（色条+大号中英）；进度条高 46px、字号 17、实色填充；卡片加深并降低氛围光以抬对比度
+  - 口播 Edge TTS 默认合成后 **atempo 1.2×**；板块行动效提前口播约 0.5s；消息口播完整标题不截断；消息章字幕按条中英配对
+  - 持仓章总标题「持仓量变动」，子卡「中信多空」不变
 
 ### 3. 校验与渲染
 
@@ -89,7 +97,7 @@ python3.12 export_opencut_package.py
 
 | 项 | 约定 |
 |----|------|
-| 封面 | 首帧约 `COVER_S` 秒：品牌 ETF-68、当日市场复盘、日期、水印 |
+| 封面 | 首帧约 `COVER_S`（默认 1.0）秒后接开场口播：品牌 ETF-68、当日市场复盘、日期、水印 |
 | 声明 | 右上：`数据来源于网络，不构成投资建议`；收束口播/画面：`数据来源于网络，仅供参考` |
 | 水印 | `小哈的一天快乐`（主水印 + 角标） |
 | 进度条 | 高 30px；段内显示中文章标题（可辅英）；当前章高亮填充 |
@@ -98,9 +106,10 @@ python3.12 export_opencut_package.py
 | 技术候选列 | 当日涨跌 / 5日涨跌 / 当日资金 / 5日资金 |
 | 颜色 | 涨/流入红；跌/流出绿 |
 | 上涨占比 | 原「市场宽度」；开场可附简短解释 |
+| 开场看板 | 视觉-only：当日 A 股成交额 + 近五日均成交额；上证/深证/创业板/科创50 点位与涨跌（涨红跌绿）；**不入口播** |
 
 章节 id：`open` / `sectors` / `citic` / `news` / `candidates` / `close`（已去掉波动领先）。
-中信章展示三项：中信多空、其它机构多空单、当日多空单总计（`grandTotal`/`otherTotal`，可由 CFFEX 日文件补全）。
+中信章总标题为「持仓量变动」，子项：中信多空、其它机构、总体、本月总体。当日三项口播互斥「净加空xx手 / 净加多xx手 / 持平」；本月用 `monthNet` 念「本月总体净空/净多」。实质消息口播完整标题；板块行动效在对应口播前约 0.5s 出现。TTS 语速约 atempo 1.2×。
 
 改布局：`render_chapter_body` + `chapter_motion_and_sfx` + `render_html`（均在 `build_composition.py`）。
 

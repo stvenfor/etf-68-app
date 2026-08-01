@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fmtNum, fmtPct } from "./filters";
+import { fmtNum, fmtPct, formatEstimateTimeDisplay } from "./filters";
 import type { MyHoldingRow, MyHoldingsBundle } from "./types";
 
 const CATEGORY_ORDER = ["equity", "bond", "hybrid", "qdii"] as const;
@@ -76,15 +76,9 @@ function groupRows(rows: MyHoldingRow[]): Array<{ key: string; label: string; ro
   return groups;
 }
 
-/** 展示完整估值时间；无秒则保留原文字 */
+/** 估值时间：超过 14:50 显示 14:50；刷新时刻与估值数值仍为实时 */
 function formatEstimateTime(v?: string | null): string {
-  if (!v) return "—";
-  // 已公布回退：保留「刷新时刻 · 净值日…」全文
-  if (v.includes("已公布") || v.includes("无盘中")) return v;
-  const m = v.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/);
-  if (m) return `${m[1]} ${m[2]}`;
-  const t = v.match(/(\d{2}:\d{2}:\d{2})/);
-  return t ? t[1] : v;
+  return formatEstimateTimeDisplay(v);
 }
 
 export default function HoldingsPanel() {

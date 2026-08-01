@@ -58,6 +58,86 @@ export type TrendScoreCard = {
   framework?: Record<string, string>;
 };
 
+export type BondEggMove = {
+  eggs?: number | null;
+  side?: "gain" | "loss" | "flat" | string;
+  label?: string;
+  tone?: "up" | "dn" | "flat" | string;
+};
+
+export type BondYieldPoint = {
+  id: string;
+  name: string;
+  level?: number | null;
+  deltaBp?: number | null;
+  date?: string | null;
+  move?: BondEggMove;
+};
+
+export type BondEtfRef = {
+  code: string;
+  name: string;
+  ret1?: number | null;
+  move?: BondEggMove;
+};
+
+export type BondTenorBucket = {
+  key: string;
+  label: string;
+  tenorNote?: string;
+  forecast?: string;
+  move?: BondEggMove;
+  primaryYield?: BondYieldPoint;
+  secondaryYields?: BondYieldPoint[];
+  etf?: BondEtfRef | null;
+};
+
+export type BondEstimate = {
+  bucket?: string;
+  side?: "gain" | "loss" | "flat" | string;
+  tone?: "up" | "dn" | "flat" | string;
+  lo?: number;
+  hi?: number;
+  label?: string;
+};
+
+export type BondPureFundRow = {
+  code: string;
+  name: string;
+  ratePos?: number;
+  creditPos?: number;
+  duration?: number;
+  bucket?: string;
+  estimate?: BondEstimate;
+  implied?: BondEggMove & { raw?: number | null };
+};
+
+export type BondReview = {
+  ok?: boolean;
+  asOf?: string | null;
+  fetchedAt?: string | null;
+  unit?: string;
+  rule?: string;
+  summary?: string;
+  error?: string | null;
+  yields?: {
+    y2?: BondYieldPoint;
+    y5?: BondYieldPoint;
+    y10?: BondYieldPoint;
+    y30?: BondYieldPoint;
+  };
+  rate?: { buckets?: BondTenorBucket[] };
+  credit?: {
+    key?: string;
+    label?: string;
+    forecast?: string;
+    move?: BondEggMove;
+    etf?: BondEtfRef | null;
+  };
+  pureBonds?: BondPureFundRow[];
+  outlook?: Record<string, BondEstimate>;
+};
+
 export type ImpactEventRow = {
   code: string;
   name: string;
@@ -67,14 +147,94 @@ export type ImpactEventRow = {
   events?: any[];
 };
 
+export type EventMatrixDirection =
+  | "利好"
+  | "利空"
+  | "中性"
+  | "中性偏多"
+  | "中性偏空"
+  | "分化"
+  | string;
+
+export type EventMatrixCounts = {
+  bull?: number;
+  bear?: number;
+  split?: number;
+  neutral?: number;
+  neutralPlus?: number;
+  neutralMinus?: number;
+};
+
+export type EventMatrixEtfCell = {
+  code: string;
+  name: string;
+  sector?: string;
+  sectorKey?: string;
+  theme?: string;
+  direction: EventMatrixDirection;
+  reason?: string;
+  matchedBullKeys?: string[];
+  matchedBearKeys?: string[];
+  verified?: boolean | null;
+  retT?: number | null;
+  cumT3?: number | null;
+  barDate?: string | null;
+};
+
+export type EventMatrixEvent = {
+  id: string;
+  date: string;
+  title: string;
+  category?: string;
+  impact?: string;
+  note?: string;
+  bullKeys?: string[];
+  bearKeys?: string[];
+  counts?: EventMatrixCounts;
+  etfs?: EventMatrixEtfCell[];
+};
+
 export type EventMatrix = {
-  events: Array<{
-    id: string;
-    date: string;
-    title: string;
-    category?: string;
-    etfs?: Array<{ code: string; name: string; direction: string; sector?: string }>;
-  }>;
+  asOf?: string;
+  generatedAt?: string;
+  method?: string;
+  eventCount?: number;
+  etfCount?: number;
+  events: EventMatrixEvent[];
+};
+
+export type MarketIndexQuote = {
+  id: string;
+  code: string;
+  name: string;
+  nameEn?: string;
+  price: number | null;
+  change: number | null;
+  changePct: number | null;
+  tone?: "up" | "dn" | "flat" | string;
+};
+
+export type MarketTurnover = {
+  ok?: boolean;
+  date?: string;
+  amountYi?: number | null;
+  amountLabel?: string;
+  avg5Yi?: number | null;
+  avg5Label?: string;
+  vsAvgPct?: number | null;
+  series?: Array<{ date: string; amountYi: number; shYi?: number; szYi?: number }>;
+  error?: string;
+};
+
+export type MarketBoard = {
+  ok?: boolean;
+  asOf?: string | null;
+  live?: boolean;
+  fetchedAt?: string | null;
+  turnover?: MarketTurnover;
+  indices?: MarketIndexQuote[];
+  error?: string;
+  skipped?: boolean;
 };
 
 export type UiBundle = {
@@ -84,7 +244,9 @@ export type UiBundle = {
   ret30Entry?: string | null;
   ret30AsOf?: string | null;
   counts: { byAction: Record<string, number>; byTrend: Record<string, number> };
+  bondReview?: BondReview | null;
   trendScoreCard?: TrendScoreCard | null;
+  marketBoard?: MarketBoard | null;
   rows: EtfRow[];
   impactEvents?: { rows: ImpactEventRow[]; method?: string } | null;
   eventMatrix?: EventMatrix | null;
@@ -107,7 +269,11 @@ export type UiBundle = {
       days: Array<{
         date: string;
         citicTotal?: number;
+        otherTotal?: number | null;
+        grandTotal?: number | null;
         stance?: string;
+        otherStance?: string;
+        grandStance?: string;
         label?: string;
         IH?: number | null;
         IF?: number | null;
@@ -282,6 +448,13 @@ declare global {
       refreshMyHoldings: () => Promise<{
         ok: boolean;
         bundle?: MyHoldingsBundle;
+        error?: string;
+      }>;
+      refreshBoard: (payload?: { historical?: boolean; withNews?: boolean }) => Promise<{
+        ok: boolean;
+        bundle?: UiBundle;
+        marketBoard?: MarketBoard | null;
+        fetchedAt?: string | null;
         error?: string;
       }>;
       onGenerateLog: (cb: (line: string) => void) => () => void;

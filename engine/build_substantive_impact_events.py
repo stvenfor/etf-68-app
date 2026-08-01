@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
+from src.live_impact_news import fetch_eastmoney_headlines, live_events_for_etf
 from src.market_data import DailyBar, PublicMarketDataProvider
 
 MODULE_ROOT = Path(__file__).resolve().parent
@@ -30,6 +31,8 @@ REPORTS = MODULE_ROOT / "reports"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 TARGET_N = 10
 LOOKBACK_BARS = 180
+# Prefer curated catalog entries within this window; older ones still fill leftover slots.
+CURATED_RECENCY_DAYS = 21
 
 SECTOR_CN = {
     "advanced_equipment": "高端装备",
@@ -389,6 +392,10 @@ def wrap_event(
     }
 
 
+def last_bar_date(bars: list[DailyBar]) -> date | None:
+    return bars[-1].date if bars else None
+
+
 def evaluate_named(
     key: str,
     bars: list[DailyBar],
@@ -429,6 +436,59 @@ def evaluate_named(
         source_key=key,
         wr=wr,
     )
+
+
+def evaluate_live(
+    meta: dict[str, Any],
+    bars: list[DailyBar],
+    side: Literal["bull", "bear"],
+) -> dict[str, Any] | None:
+    """Price-gate live headlines; allow pending when bars have not caught up yet."""
+    ed = parse_event_date(str(meta.get("date") or ""))
+    if ed is None:
+        return None
+    logic = str(meta.get("logic") or "")
+    if side == "bull" and logic not in {"利好", "中性偏多"}:
+        return None
+    if side == "bear" and logic != "利空":
+        return None
+
+    last = last_bar_date(bars)
+    pending = last is not None and ed > last
+    if pending or last is None:
+        direction = "利好" if logic == "利好" else ("利空" if logic == "利空" else "中性偏多")
+        return {
+            "date": meta["date"],
+            "title": meta["title"],
+            "impact": str(meta.get("impact") or "") + "（待价格确认）",
+            "direction": direction,
+            "sourceKey": meta["sourceKey"],
+            "verified": False,
+            "live": True,
+            "windowRet": {"retT": None, "retT1": None, "cumT3": None, "barDate": None},
+        }
+
+    wr = window_returns(bars, ed)
+    ret_t = wr["retT"] if isinstance(wr["retT"], float) else None
+    cum = wr["cumT3"] if isinstance(wr["cumT3"], float) else None
+    if side == "bull":
+        if not passes_bull_price(ret_t, cum):
+            return None
+        direction = "利好" if logic == "利好" else "中性偏多"
+    else:
+        if not passes_bear_price(ret_t, cum):
+            return None
+        direction = "利空"
+    ev = wrap_event(
+        date_s=str(meta["date"]),
+        title=str(meta["title"]),
+        impact=str(meta.get("impact") or ""),
+        direction=direction,
+        source_key=str(meta["sourceKey"]),
+        wr=wr,
+    )
+    ev["live"] = True
+    return ev
 
 
 def discover_price_shocks(
@@ -502,7 +562,13 @@ def discover_price_shocks(
         out.append(ev)
     return out
 
-def ordered_keys(sector: str, theme: str, side: Literal["bull", "bear"]) -> list[str]:
+def ordered_keys(
+    sector: str,
+    theme: str,
+    side: Literal["bull", "bear"],
+    *,
+    as_of: date | None = None,
+) -> list[str]:
     if side == "bull":
         primary = SECTOR_BULL.get(sector) or THEME_BULL.get(theme) or ["csrc", "gdp", "cpi", "imf", "citic_peak"]
         extra = THEME_BULL.get(theme, [])
@@ -538,7 +604,33 @@ def ordered_keys(sector: str, theme: str, side: Literal["bull", "bear"]) -> list
     for k in primary + extra + pool:
         if k not in ordered and k in MKT:
             ordered.append(k)
+
+    # Recency first so stale curated catalog does not bury fresh catalysts.
+    def _key_date(k: str) -> str:
+        return str((MKT.get(k) or {}).get("date") or "")
+
+    if as_of is not None:
+        recent: list[str] = []
+        older: list[str] = []
+        cutoff = (as_of - timedelta(days=CURATED_RECENCY_DAYS)).isoformat()
+        for k in ordered:
+            if _key_date(k) >= cutoff:
+                recent.append(k)
+            else:
+                older.append(k)
+        recent.sort(key=_key_date, reverse=True)
+        older.sort(key=_key_date, reverse=True)
+        return recent + older
+    ordered.sort(key=_key_date, reverse=True)
     return ordered
+
+
+def _sort_events_desc(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        events,
+        key=lambda e: (str(e.get("date") or ""), 1 if e.get("live") else 0, str(e.get("sourceKey") or "")),
+        reverse=True,
+    )
 
 
 def collect_side(
@@ -547,10 +639,38 @@ def collect_side(
     theme: str,
     side: Literal["bull", "bear"],
     n: int,
+    *,
+    live_catalog: list[dict[str, Any]] | None = None,
+    code: str = "",
+    as_of: date | None = None,
 ) -> list[dict[str, Any]]:
     kept: list[dict[str, Any]] = []
     used_dates: set[str] = set()
-    for key in ordered_keys(sector, theme, side):
+    used_titles: set[str] = set()
+
+    # 1) Live Eastmoney headlines first (timeliness).
+    for meta in live_events_for_etf(live_catalog or [], code=code, sector=sector, side=side):
+        if len(kept) >= n:
+            break
+        ev = evaluate_live(meta, bars, side)
+        if ev is None:
+            continue
+        title = str(ev.get("title") or "")
+        if title in used_titles:
+            continue
+        if any(x.get("sourceKey") == ev.get("sourceKey") for x in kept):
+            continue
+        bar_d = (ev.get("windowRet") or {}).get("barDate") or ev["date"]
+        # Pending same-day live news may share a date slot; allow one pending + verified mix by title.
+        if bar_d and str(bar_d)[:10] in used_dates and ev.get("verified") is not False:
+            continue
+        kept.append(ev)
+        used_titles.add(title)
+        if bar_d:
+            used_dates.add(str(bar_d)[:10])
+
+    # 2) Curated catalog, recent first.
+    for key in ordered_keys(sector, theme, side, as_of=as_of):
         if len(kept) >= n:
             break
         ev = evaluate_named(key, bars, side)
@@ -558,17 +678,21 @@ def collect_side(
             continue
         if any(x["sourceKey"] == key for x in kept):
             continue
+        title = str(ev.get("title") or "")
+        if title in used_titles:
+            continue
         bar_d = (ev.get("windowRet") or {}).get("barDate") or ev["date"]
         if bar_d in used_dates:
             continue
         kept.append(ev)
+        used_titles.add(title)
         used_dates.add(str(bar_d)[:10])
     if len(kept) < n:
         fills = discover_price_shocks(bars, side, used_dates, n - len(kept))
         kept.extend(fills)
     if len(kept) < n:
         raise RuntimeError(f"insufficient_{side}:{sector}:got={len(kept)}:need={n}")
-    return kept[:n]
+    return _sort_events_desc(kept[:n])
 
 
 def fetch_bars(codes: list[str], workers: int) -> dict[str, list[DailyBar]]:
@@ -598,6 +722,11 @@ def build(day: str, workers: int, per_side: int) -> dict[str, Any]:
     ctx = json.loads((MODULE_ROOT / "data" / "sector-context-2026-07-20.json").read_text(encoding="utf-8"))
     codes = [str(r["code"]) for r in review["rows"]]
     bars_by = fetch_bars(codes, workers=workers)
+    as_of = parse_event_date(str(review.get("data_date") or day)) or date.fromisoformat(day)
+    try:
+        live_catalog = fetch_eastmoney_headlines(as_of=as_of)
+    except Exception:  # noqa: BLE001
+        live_catalog = []
 
     rows_out: list[dict[str, Any]] = []
     for r in review["rows"]:
@@ -605,8 +734,26 @@ def build(day: str, workers: int, per_side: int) -> dict[str, Any]:
         sector = str(r["sector"])
         theme = str(ctx["sector_theme"].get(sector, ""))
         bars = bars_by[code]
-        positives = collect_side(bars, sector, theme, "bull", per_side)
-        negatives = collect_side(bars, sector, theme, "bear", per_side)
+        positives = collect_side(
+            bars,
+            sector,
+            theme,
+            "bull",
+            per_side,
+            live_catalog=live_catalog,
+            code=code,
+            as_of=as_of,
+        )
+        negatives = collect_side(
+            bars,
+            sector,
+            theme,
+            "bear",
+            per_side,
+            live_catalog=live_catalog,
+            code=code,
+            as_of=as_of,
+        )
         rows_out.append(
             {
                 "code": code,
@@ -629,11 +776,13 @@ def build(day: str, workers: int, per_side: int) -> dict[str, Any]:
     return {
         "asOf": review.get("data_date") or day,
         "generatedAt": datetime.now(SHANGHAI).isoformat(),
+        "liveNewsCount": len(live_catalog),
         "method": (
             f"每只ETF实质利好/实质利空各{per_side}条。"
+            "优先接入东财7×24/要闻即时资讯（近7日），再按板块映射手工目录（近21日优先），"
             "利好：逻辑偏多+禁止利好砸盘(ret_T≤-2%或cum≤-3%)，须ret_T≥0或cum≥0；"
             "利空：逻辑偏空/风险偏好冲击+禁止伪利空(ret_T≥+2%或cum≥+3%)，须ret_T≤0或cum≤0；"
-            "不足时用该ETF价格确认的大幅上涨/下跌窗口补齐。"
+            "当日尚未收盘的即时资讯标记待价格确认；不足时用该ETF价格确认的大幅上涨/下跌窗口补齐。"
         ),
         "rules": {
             "perSide": per_side,
@@ -642,14 +791,102 @@ def build(day: str, workers: int, per_side: int) -> dict[str, Any]:
             "bearRejectRetT": 2.0,
             "bearRejectCumT3": 3.0,
             "bullHardExclude": sorted(BULL_EXCLUDE),
+            "liveLookbackDays": 7,
+            "curatedRecencyDays": CURATED_RECENCY_DAYS,
         },
         "rows": rows_out,
     }
 
 
+def merge_live_into_impact(
+    impact: dict[str, Any],
+    *,
+    as_of: date | None = None,
+    per_side: int | None = None,
+) -> dict[str, Any]:
+    """Soft-refresh: prepend latest live headlines into an existing impact payload (no bar refetch)."""
+    if not isinstance(impact, dict) or not isinstance(impact.get("rows"), list):
+        return impact
+    day = as_of or parse_event_date(str(impact.get("asOf") or "")) or datetime.now(SHANGHAI).date()
+    try:
+        live_catalog = fetch_eastmoney_headlines(as_of=day)
+    except Exception:  # noqa: BLE001
+        return impact
+    if not live_catalog:
+        return impact
+
+    limit = int(per_side or (impact.get("rules") or {}).get("perSide") or TARGET_N)
+    rows_out: list[dict[str, Any]] = []
+    for row in impact["rows"]:
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or "")
+        sector = str(row.get("sectorKey") or "")
+        pos = list(row.get("positiveEvents") or row.get("events") or [])
+        neg = list(row.get("negativeEvents") or [])
+
+        def _prepend(existing: list[dict[str, Any]], side: Literal["bull", "bear"]) -> list[dict[str, Any]]:
+            # Keep curated + price-verified live; replace only soft "待价格确认" rows.
+            base = [
+                e
+                for e in existing
+                if isinstance(e, dict)
+                and not (
+                    (e.get("live") or str(e.get("sourceKey") or "").startswith("live_"))
+                    and e.get("verified") is False
+                )
+            ]
+            titles = {str(e.get("title") or "") for e in base}
+            keys = {str(e.get("sourceKey") or "") for e in base}
+            fresh: list[dict[str, Any]] = []
+            for meta in live_events_for_etf(live_catalog, code=code, sector=sector, side=side):
+                title = str(meta.get("title") or "")
+                sk = str(meta.get("sourceKey") or "")
+                if title in titles or sk in keys:
+                    continue
+                logic = str(meta.get("logic") or "")
+                direction = "利好" if logic == "利好" else ("利空" if logic == "利空" else "中性偏多")
+                fresh.append(
+                    {
+                        "date": meta["date"],
+                        "title": meta["title"],
+                        "impact": str(meta.get("impact") or "") + "（待价格确认）",
+                        "direction": direction,
+                        "sourceKey": sk,
+                        "verified": False,
+                        "live": True,
+                        "windowRet": {"retT": None, "retT1": None, "cumT3": None, "barDate": None},
+                    }
+                )
+                titles.add(title)
+                keys.add(sk)
+            merged = _sort_events_desc(fresh + base)
+            return merged[:limit]
+
+        positives = _prepend(pos, "bull")
+        negatives = _prepend(neg, "bear")
+        new_row = dict(row)
+        new_row["positiveEvents"] = positives
+        new_row["negativeEvents"] = negatives
+        new_row["events"] = positives
+        new_row["eventCount"] = len(positives)
+        new_row["positiveCount"] = len(positives)
+        new_row["negativeCount"] = len(negatives)
+        rows_out.append(new_row)
+
+    out = dict(impact)
+    out["rows"] = rows_out
+    out["liveNewsCount"] = len(live_catalog)
+    out["liveRefreshedAt"] = datetime.now(SHANGHAI).isoformat()
+    method = str(out.get("method") or "")
+    if "东财" not in method:
+        out["method"] = method + "；组装时软刷新东财即时资讯。"
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--date", default="2026-07-24")
+    parser.add_argument("--date", default=datetime.now(SHANGHAI).date().isoformat())
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--per-side", type=int, default=TARGET_N)
     parser.add_argument("--output", type=Path, default=None)
@@ -662,6 +899,7 @@ def main() -> int:
             {
                 "output": str(out),
                 "etfs": len(payload["rows"]),
+                "liveNewsCount": payload.get("liveNewsCount"),
                 "minPositive": min(r["positiveCount"] for r in payload["rows"]),
                 "minNegative": min(r["negativeCount"] for r in payload["rows"]),
                 "totalPositive": sum(r["positiveCount"] for r in payload["rows"]),

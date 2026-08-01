@@ -13,12 +13,12 @@ TARGET_DURATION_S = 70.0
 
 # Soft hints only — VO is never hard-trimmed to fit.
 CHAPTER_BUDGETS = {
-    "open": 6.0,
+    "open": 5.0,
     "sectors": 14.0,
-    "citic": 12.0,
-    "news": 16.0,
-    "candidates": 22.0,
-    "close": 5.0,
+    "citic": 14.0,
+    "news": 28.0,  # full headline titles — do not squeeze
+    "candidates": 18.0,
+    "close": 4.0,
 }
 
 _CFFEX_CANDIDATES = (
@@ -132,6 +132,39 @@ def _stance_from_lots(v: float | None) -> str:
     return "平"
 
 
+def _daily_stance_phrase(name: str, v: Any, stance: Any = None) -> str:
+    """口播/展示：名称 +（净加空xx手 | 净加多xx手 | 持平），三者互斥。"""
+    n = _num(v)
+    if n is None:
+        return f"{name}暂无"
+    lots = int(round(n))
+    st = str(stance or "").strip() or _stance_from_lots(float(lots))
+    if lots == 0 or st == "平":
+        return f"{name}持平"
+    abs_n = abs(lots)
+    if st == "净加多":
+        return f"{name}净加多{abs_n}手"
+    if st == "净加空":
+        return f"{name}净加空{abs_n}手"
+    # fallback by sign
+    if lots > 0:
+        return f"{name}净加多{abs_n}手"
+    return f"{name}净加空{abs_n}手"
+
+
+def _month_net_phrase(month_net: Any) -> str:
+    """本月累计：本月总体净空xx手 | 净多xx手 | 持平。"""
+    n = _num(month_net)
+    if n is None:
+        return "本月总体暂无"
+    lots = int(round(n))
+    if lots > 0:
+        return f"本月总体净多{lots}手"
+    if lots < 0:
+        return f"本月总体净空{abs(lots)}手"
+    return "本月总体持平"
+
+
 def _load_cffex_day(day: str) -> dict[str, Any] | None:
     """Optional enrichment: citic_total / net_buy_total from cffex-daily export."""
     stem = day.replace("-", "")
@@ -155,8 +188,9 @@ def _load_cffex_day(day: str) -> dict[str, Any] | None:
 
 def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
     day = str(bundle.get("dataDate") or "")
+    months = (bundle.get("citicMonthly") or {}).get("months") or []
     days: list[dict[str, Any]] = []
-    for month in (bundle.get("citicMonthly") or {}).get("months") or []:
+    for month in months:
         days.extend(month.get("days") or [])
     days = [d for d in days if d.get("date")]
     days.sort(key=lambda d: str(d.get("date")))
@@ -199,12 +233,41 @@ def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
             grand_total = _num(cffex.get("net_buy_total"))
         if other_total is None and grand_total is not None and cur_total is not None:
             other_total = grand_total - cur_total
-        # Prefer derived other when both sides exist
         elif grand_total is not None and cur_total is not None:
             other_total = grand_total - cur_total
 
     if other_total is None and grand_total is not None and cur_total is not None:
         other_total = grand_total - cur_total
+
+    ym = cur_date[:7]
+    month_row: dict[str, Any] | None = None
+    for month in months:
+        if str(month.get("label") or "") == ym:
+            month_row = month
+            break
+        if any(str(d.get("date") or "").startswith(ym) for d in (month.get("days") or [])):
+            month_row = month
+            break
+
+    month_net = _num((month_row or {}).get("monthNet"))
+    if month_net is None and month_row:
+        vals = [_num(d.get("citicTotal")) for d in (month_row.get("days") or [])]
+        vals = [v for v in vals if v is not None]
+        if vals:
+            month_net = float(sum(vals))
+
+    stance = cur.get("stance") or _stance_from_lots(cur_total)
+    other_stance = _stance_from_lots(other_total)
+    grand_stance = _stance_from_lots(grand_total)
+    raw_month_stance = _stance_from_lots(month_net)
+    if raw_month_stance == "净加空":
+        month_stance_label = "净空"
+    elif raw_month_stance == "净加多":
+        month_stance_label = "净多"
+    elif raw_month_stance == "平":
+        month_stance_label = "持平"
+    else:
+        month_stance_label = "—"
 
     return {
         "ok": True,
@@ -215,9 +278,12 @@ def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
         "grandTotal": grand_total,
         "prevTotal": prev_total,
         "delta": delta,
-        "stance": cur.get("stance") or _stance_from_lots(cur_total),
-        "otherStance": _stance_from_lots(other_total),
-        "grandStance": _stance_from_lots(grand_total),
+        "monthNet": month_net,
+        "monthLabel": (month_row or {}).get("label") or ym,
+        "stance": stance,
+        "otherStance": other_stance,
+        "grandStance": grand_stance,
+        "monthStance": month_stance_label,
         "label": cur.get("label") or "—",
     }
 
@@ -226,56 +292,77 @@ def _event_key(ev: dict[str, Any]) -> str:
     return str(ev.get("sourceKey") or ev.get("id") or ev.get("title") or "").strip()
 
 
-def collect_news(bundle: dict[str, Any], n: int = 5) -> dict[str, list[dict[str, Any]]]:
+def collect_news(
+    bundle: dict[str, Any],
+    n: int = 5,
+    *,
+    lookback_days: int = 5,
+) -> dict[str, list[dict[str, Any]]]:
+    """Pick newest substantive bullish/bearish headlines (prefer recent dates)."""
     pos: dict[str, dict[str, Any]] = {}
     neg: dict[str, dict[str, Any]] = {}
+    as_of = str(bundle.get("dataDate") or "").strip()
+
+    def _ingest(bucket: dict[str, dict[str, Any]], ev: dict[str, Any]) -> None:
+        key = _event_key(ev)
+        title = str(ev.get("title") or "").strip()
+        if not key or not title:
+            return
+        cur = bucket.get(key)
+        if cur is None or str(ev.get("date") or "") >= str(cur.get("date") or ""):
+            bucket[key] = {
+                "title": title,
+                "date": ev.get("date"),
+                "impact": ev.get("impact"),
+                "sourceKey": key,
+            }
+
     for row in (bundle.get("impactEvents") or {}).get("rows") or []:
+        if not isinstance(row, dict):
+            continue
         for ev in row.get("positiveEvents") or []:
-            if not isinstance(ev, dict):
-                continue
-            key = _event_key(ev)
-            title = str(ev.get("title") or "").strip()
-            if not key or not title:
-                continue
-            cur = pos.get(key)
-            if cur is None or str(ev.get("date") or "") >= str(cur.get("date") or ""):
-                pos[key] = {
-                    "title": title,
-                    "date": ev.get("date"),
-                    "impact": ev.get("impact"),
-                    "sourceKey": key,
-                }
+            if isinstance(ev, dict):
+                _ingest(pos, ev)
         for ev in row.get("negativeEvents") or []:
-            if not isinstance(ev, dict):
-                continue
-            key = _event_key(ev)
-            title = str(ev.get("title") or "").strip()
-            if not key or not title:
-                continue
-            cur = neg.get(key)
-            if cur is None or str(ev.get("date") or "") >= str(cur.get("date") or ""):
-                neg[key] = {
-                    "title": title,
-                    "date": ev.get("date"),
-                    "impact": ev.get("impact"),
-                    "sourceKey": key,
-                }
+            if isinstance(ev, dict):
+                _ingest(neg, ev)
+
+    # Prefer events on/after (as_of - lookback). Floor date as YYYY-MM-DD string compare.
+    min_date = ""
+    if as_of and lookback_days > 0:
+        try:
+            from datetime import date, timedelta
+
+            d0 = date.fromisoformat(as_of[:10])
+            min_date = (d0 - timedelta(days=lookback_days)).isoformat()
+        except ValueError:
+            min_date = ""
 
     def _sort_take(items: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         arr = list(items.values())
-        arr.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
-        # secondary dedupe by title text
+        # live_ keys and newer dates first
+        arr.sort(
+            key=lambda x: (
+                str(x.get("date") or ""),
+                1 if str(x.get("sourceKey") or "").startswith("live_") else 0,
+            ),
+            reverse=True,
+        )
         seen_titles: set[str] = set()
-        out: list[dict[str, Any]] = []
+        fresh: list[dict[str, Any]] = []
+        older: list[dict[str, Any]] = []
         for ev in arr:
             t = str(ev["title"])
             if t in seen_titles:
                 continue
             seen_titles.add(t)
-            out.append(ev)
-            if len(out) >= n:
-                break
-        return out
+            d = str(ev.get("date") or "")
+            if min_date and d and d < min_date:
+                older.append(ev)
+            else:
+                fresh.append(ev)
+        out = fresh + older
+        return out[:n]
 
     return {"positive": _sort_take(pos), "negative": _sort_take(neg)}
 
@@ -299,7 +386,12 @@ def technical_candidates(rows: list[dict[str, Any]], n: int = 5) -> list[dict[st
     return out
 
 
-def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
+def build_chapters(
+    bundle: dict[str, Any],
+    *,
+    market_board: dict[str, Any] | None = None,
+    fetch_market: bool = True,
+) -> dict[str, Any]:
     day = str(bundle.get("dataDate") or "")
     rows = list(bundle.get("rows") or [])
     breadth = _num(bundle.get("breadthPct"))
@@ -307,6 +399,19 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
     citic = citic_change(bundle)
     news = collect_news(bundle, 5)
     cands = technical_candidates(rows, 5)
+
+    # Visual-only open board (turnover + indices); never added to narration.
+    if market_board is not None:
+        board = market_board
+    elif fetch_market:
+        try:
+            from src.market_snapshot import build_market_board
+
+            board = build_market_board(as_of=day or None)
+        except Exception as exc:  # noqa: BLE001 — soft-fail
+            board = {"ok": False, "error": str(exc)[:160], "turnover": {}, "indices": []}
+    else:
+        board = {"ok": False, "skipped": True, "turnover": {}, "indices": []}
 
     # Narration lines (compact for 45–60s)
     # 「市场温度」= 站上均线 / 均线上行 / 5日上涨 / 资金流入 的综合热度
@@ -332,18 +437,22 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
 
     if citic.get("ok"):
         citic_line = (
-            f"中信多空。中信{_lots_txt(citic.get('citicTotal'))}，"
-            f"{citic.get('stance') or '—'}；"
-            f"其它机构多空单{_lots_txt(citic.get('otherTotal'))}，"
-            f"{citic.get('otherStance') or '—'}；"
-            f"当日多空单总计{_lots_txt(citic.get('grandTotal'))}，"
-            f"{citic.get('grandStance') or '—'}。"
+            "持仓量变动。"
+            + _daily_stance_phrase("中信", citic.get("citicTotal"), citic.get("stance"))
+            + "；"
+            + _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance"))
+            + "；"
+            + _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance"))
+            + "；"
+            + _month_net_phrase(citic.get("monthNet"))
+            + "。"
         )
     else:
-        citic_line = "中信多空。暂无当日持仓数据。"
+        citic_line = "持仓量变动。暂无当日持仓数据。"
 
-    pos_titles = [_short_title(str(e["title"]), 16) for e in news["positive"]]
-    neg_titles = [_short_title(str(e["title"]), 16) for e in news["negative"]]
+    # 口播用完整标题，避免省略导致遗漏
+    pos_titles = [str(e["title"]).strip() for e in news["positive"] if str(e.get("title") or "").strip()]
+    neg_titles = [str(e["title"]).strip() for e in news["negative"] if str(e.get("title") or "").strip()]
     news_line = "实质消息。"
     if pos_titles:
         news_line += "利好：" + "；".join(pos_titles) + "。"
@@ -360,9 +469,9 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
             c_parts.append(
                 f"{c['name']}当日{_fmt_pct(c['ret1'])}，五日{_fmt_pct(c['ret5'])}"
             )
-        cand_line = "技术候选资金。" + "。".join(c_parts) + "。"
+        cand_line = "技术候选。" + "。".join(c_parts) + "。"
     else:
-        cand_line = "技术候选资金。今日暂无技术候选。"
+        cand_line = "技术候选。今日暂无技术候选。"
 
     close_line = "复盘结束。数据来源于网络，仅供参考。"
 
@@ -393,15 +502,16 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "id": "citic",
-            "title": "中信多空",
-            "kicker": "03 · 多空",
+            "title": "持仓量变动",
+            "kicker": "03 · 持仓",
             "budget_s": CHAPTER_BUDGETS["citic"],
             "narration": citic_line,
-            "caption": "中信 / 其它机构 / 当日总计",
+            "caption": "中信 / 其它机构 / 总体 / 本月",
             "bullets": [
-                f"中信 {_lots_txt(citic.get('citicTotal'))} · {citic.get('stance', '—')}",
-                f"其它机构 {_lots_txt(citic.get('otherTotal'))} · {citic.get('otherStance', '—')}",
-                f"当日总计 {_lots_txt(citic.get('grandTotal'))} · {citic.get('grandStance', '—')}",
+                _daily_stance_phrase("中信多空", citic.get("citicTotal"), citic.get("stance")),
+                _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance")),
+                _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance")),
+                _month_net_phrase(citic.get("monthNet")),
             ],
         },
         {
@@ -418,11 +528,11 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "id": "candidates",
-            "title": "技术候选资金",
+            "title": "技术候选",
             "kicker": "05 · 候选",
             "budget_s": CHAPTER_BUDGETS["candidates"],
             "narration": cand_line,
-            "caption": "技术候选 · 涨跌百分比",
+            "caption": "技术面筛选候选 · 涨跌百分比",
             "bullets": [
                 f"{_etf_label(c['name'], c['code'])} 日{_fmt_pct(c['ret1'])}/5日{_fmt_pct(c['ret5'])}"
                 for c in cands
@@ -446,6 +556,7 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
         "dataDate": day,
         "targetDurationS": TARGET_DURATION_S,
         "breadthPct": breadth,
+        "marketBoard": board,
         "sectors": sectors,
         "citic": citic,
         "news": news,
@@ -455,7 +566,12 @@ def build_chapters(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_review_script(bundle: dict[str, Any]) -> dict[str, Any]:
+def build_review_script(
+    bundle: dict[str, Any],
+    *,
+    market_board: dict[str, Any] | None = None,
+    fetch_market: bool = True,
+) -> dict[str, Any]:
     if not bundle or not bundle.get("dataDate"):
         return {"ok": False, "error": "missing_bundle"}
-    return build_chapters(bundle)
+    return build_chapters(bundle, market_board=market_board, fetch_market=fetch_market)

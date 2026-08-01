@@ -5,7 +5,7 @@ export const MAIN_TABS = [
   { id: "funds30", label: "30 公募" },
   { id: "holdings", label: "我的持仓" },
   { id: "delivery", label: "交割日历" },
-  { id: "citic", label: "中信多空" },
+  { id: "citic", label: "多空数据" },
   { id: "events", label: "事件→ETF" },
   { id: "impact", label: "实质利好/利空" },
   { id: "detail", label: "68 ETF 明细" },
@@ -117,6 +117,47 @@ export function fmtLots(v: number | null | undefined): string {
 export function fmtNum(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
   return v.toFixed(digits);
+}
+
+/** Cap a HH:MM[:SS] clock at 14:50 (valuation display rule). */
+export function capEstimateClockHm(hm: string): string {
+  const m = hm.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return hm;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (hour < 14 || (hour === 14 && minute <= 50)) return hm;
+  return m[3] != null ? "14:50:00" : "14:50";
+}
+
+/**
+ * Display「估值时间」完整带日期：
+ * - quote 时钟超过 14:50 显示为 14:50:00（估值数值仍实时）
+ * - 刷新时刻与「已公布」说明原样保留，不做截断
+ */
+export function formatEstimateTimeDisplay(v?: string | null): string {
+  if (!v) return "—";
+  const text = String(v).trim();
+  if (!text) return "—";
+
+  // Prefer "YYYY-MM-DD HH:MM[:SS] · …"
+  const withDate = text.match(
+    /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)(\s*·\s*[\s\S]*)?$/,
+  );
+  if (withDate) {
+    const date = withDate[1];
+    let clock = capEstimateClockHm(withDate[2]);
+    if (/^\d{2}:\d{2}$/.test(clock)) clock = `${clock}:00`;
+    const suffix = (withDate[3] || "").trimEnd();
+    return `${date} ${clock}${suffix}`;
+  }
+
+  // Cap the first clock in free-form text; never truncate the rest.
+  return text.replace(/(\d{1,2}:\d{2})(:\d{2})?/, (_all, hm: string, sec?: string) => {
+    const capped = capEstimateClockHm(sec ? `${hm}${sec}` : hm);
+    if (/^\d{2}:\d{2}:\d{2}$/.test(capped)) return capped;
+    if (/^\d{2}:\d{2}$/.test(capped)) return `${capped}:00`;
+    return capped;
+  });
 }
 
 function matchSign(v: number | null | undefined, opt: string): boolean {

@@ -92,7 +92,7 @@ def main() -> None:
             "stamp": ts.strftime("%Y-%m-%d %H:%M"),
             "outflowTop": outflow_top,
             "inflowTop": inflow_top,
-            "marketExitYi": round(max(0.0, out_sum - in_sum), 4),
+            "marketExitYi": round(out_sum - in_sum, 4),
         })
 
     sectors = [

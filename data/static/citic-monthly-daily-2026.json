@@ -1,6 +1,6 @@
 {
-  "asOf": "2026-07-24",
-  "generatedAt": "2026-07-25T22:26:33.248281",
+  "asOf": "2026-07-27",
+  "generatedAt": "2026-07-31T22:38:57",
   "months": [
     {
       "month": 1,
@@ -16,11 +16,15 @@
           "IF": -861,
           "IC": 700,
           "IM": -1958,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": -0.26,
           "szPct": -0.18,
           "cybPct": -0.2,
-          "kcbPct": 1.35
+          "kcbPct": 1.35,
+          "otherTotal": -5563,
+          "grandTotal": -7864,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         }
       ],
       "monthNet": -2301,
@@ -42,11 +46,15 @@
           "IF": -423,
           "IC": -1363,
           "IM": -114,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": 0.87,
           "szPct": 1.36,
           "cybPct": 0.99,
-          "kcbPct": -0.34
+          "kcbPct": -0.34,
+          "otherTotal": -8886,
+          "grandTotal": -10449,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         }
       ],
       "monthNet": -1563,
@@ -68,11 +76,15 @@
           "IF": -2090,
           "IC": -3679,
           "IM": -1012,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": -1.24,
           "szPct": -0.25,
           "cybPct": 1.3,
-          "kcbPct": -1.55
+          "kcbPct": -1.55,
+          "otherTotal": -6918,
+          "grandTotal": -13244,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         }
       ],
       "monthNet": -6326,
@@ -94,11 +106,15 @@
           "IF": 1827,
           "IC": 505,
           "IM": 405,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": -0.1,
           "szPct": 0.6,
           "cybPct": 1.43,
-          "kcbPct": 0.08
+          "kcbPct": 0.08,
+          "otherTotal": 230,
+          "grandTotal": 2139,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         }
       ],
       "monthNet": 1909,
@@ -120,11 +136,15 @@
           "IF": -538,
           "IC": 986,
           "IM": -2310,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": -1.02,
           "szPct": -1.17,
           "cybPct": -0.56,
-          "kcbPct": -1.67
+          "kcbPct": -1.67,
+          "otherTotal": 1585,
+          "grandTotal": 687,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-05-29",
@@ -354,11 +374,15 @@
           "IF": -3932,
           "IC": -1313,
           "IM": -2311,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": 1.78,
           "szPct": 2.13,
           "cybPct": 2.52,
-          "kcbPct": 1.96
+          "kcbPct": 1.96,
+          "otherTotal": -9605,
+          "grandTotal": -15015,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-06-23",
@@ -480,7 +504,11 @@
           "shPct": 0.44,
           "szPct": -0.53,
           "cybPct": -1.89,
-          "kcbPct": -2.48
+          "kcbPct": -2.48,
+          "otherTotal": 2102,
+          "grandTotal": 1841,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-02",
@@ -496,7 +524,11 @@
           "shPct": -2.03,
           "szPct": -3.85,
           "cybPct": -5.71,
-          "kcbPct": -7.7
+          "kcbPct": -7.7,
+          "otherTotal": -2820,
+          "grandTotal": -6371,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-03",
@@ -512,7 +544,11 @@
           "shPct": 0.37,
           "szPct": 0.64,
           "cybPct": 0.07,
-          "kcbPct": -0.59
+          "kcbPct": -0.59,
+          "otherTotal": 2588,
+          "grandTotal": -370,
+          "otherStance": "净加多",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-06",
@@ -528,7 +564,11 @@
           "shPct": -0.06,
           "szPct": -1.16,
           "cybPct": -1.77,
-          "kcbPct": 1.04
+          "kcbPct": 1.04,
+          "otherTotal": 2018,
+          "grandTotal": -658,
+          "otherStance": "净加多",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-07",
@@ -544,7 +584,11 @@
           "shPct": -1.26,
           "szPct": -1.24,
           "cybPct": -0.94,
-          "kcbPct": 0.28
+          "kcbPct": 0.28,
+          "otherTotal": -1949,
+          "grandTotal": -3338,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-08",
@@ -560,7 +604,11 @@
           "shPct": -0.49,
           "szPct": -1.87,
           "cybPct": -1.7,
-          "kcbPct": 0.73
+          "kcbPct": 0.73,
+          "otherTotal": -2613,
+          "grandTotal": -5310,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-09",
@@ -576,7 +624,11 @@
           "shPct": 1.65,
           "szPct": 3.07,
           "cybPct": 4.49,
-          "kcbPct": 8.41
+          "kcbPct": 8.41,
+          "otherTotal": -1387,
+          "grandTotal": -5148,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-10",
@@ -592,7 +644,11 @@
           "shPct": -1.0,
           "szPct": -2.29,
           "cybPct": -4.37,
-          "kcbPct": -5.53
+          "kcbPct": -5.53,
+          "otherTotal": 4670,
+          "grandTotal": 6193,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-13",
@@ -608,7 +664,11 @@
           "shPct": -2.06,
           "szPct": -3.48,
           "cybPct": -3.1,
-          "kcbPct": -3.42
+          "kcbPct": -3.42,
+          "otherTotal": -11075,
+          "grandTotal": -8625,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-14",
@@ -624,7 +684,11 @@
           "shPct": 1.36,
           "szPct": 2.77,
           "cybPct": 3.43,
-          "kcbPct": 0.77
+          "kcbPct": 0.77,
+          "otherTotal": -113,
+          "grandTotal": -939,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-15",
@@ -640,7 +704,11 @@
           "shPct": -0.29,
           "szPct": -0.97,
           "cybPct": -1.21,
-          "kcbPct": -4.25
+          "kcbPct": -4.25,
+          "otherTotal": 6243,
+          "grandTotal": 6093,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-16",
@@ -656,7 +724,11 @@
           "shPct": -1.85,
           "szPct": -1.97,
           "cybPct": -2.95,
-          "kcbPct": -4.02
+          "kcbPct": -4.02,
+          "otherTotal": -10358,
+          "grandTotal": -9522,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-17",
@@ -668,11 +740,15 @@
           "IF": -1201,
           "IC": 119,
           "IM": -971,
-          "isDelivery": true,
+          "isDelivery": false,
           "shPct": -3.05,
           "szPct": -5.4,
           "cybPct": -7.15,
-          "kcbPct": -7.12
+          "kcbPct": -7.12,
+          "otherTotal": -4941,
+          "grandTotal": -6545,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         },
         {
           "date": "2026-07-20",
@@ -688,7 +764,11 @@
           "shPct": 0.85,
           "szPct": -0.71,
           "cybPct": 0.42,
-          "kcbPct": 0.19
+          "kcbPct": 0.19,
+          "otherTotal": 7536,
+          "grandTotal": 8780,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-21",
@@ -704,7 +784,11 @@
           "shPct": 1.79,
           "szPct": 4.81,
           "cybPct": 7.05,
-          "kcbPct": 10.73
+          "kcbPct": 10.73,
+          "otherTotal": -1087,
+          "grandTotal": 6570,
+          "otherStance": "净加空",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-22",
@@ -720,7 +804,11 @@
           "shPct": 0.07,
           "szPct": -1.42,
           "cybPct": -3.23,
-          "kcbPct": -2.26
+          "kcbPct": -2.26,
+          "otherTotal": 7653,
+          "grandTotal": 9088,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-23",
@@ -736,7 +824,11 @@
           "shPct": 0.25,
           "szPct": 0.44,
           "cybPct": 0.25,
-          "kcbPct": -3.78
+          "kcbPct": -3.78,
+          "otherTotal": 2295,
+          "grandTotal": 1731,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
         },
         {
           "date": "2026-07-24",
@@ -752,13 +844,37 @@
           "shPct": -1.61,
           "szPct": -2.47,
           "cybPct": -2.65,
-          "kcbPct": -0.14
+          "kcbPct": -0.14,
+          "otherTotal": 4638,
+          "grandTotal": 4816,
+          "otherStance": "净加多",
+          "grandStance": "净加多"
+        },
+        {
+          "date": "2026-07-27",
+          "weekday": "周一",
+          "citicTotal": -1261,
+          "stance": "净加空",
+          "label": "加空单1261手",
+          "IH": -1973,
+          "IF": 110,
+          "IC": -432,
+          "IM": 1034,
+          "isDelivery": false,
+          "otherTotal": -1300,
+          "grandTotal": -2561,
+          "shPct": 1.15,
+          "szPct": 2.72,
+          "cybPct": 3.16,
+          "kcbPct": 1.16,
+          "otherStance": "净加空",
+          "grandStance": "净加空"
         }
       ],
-      "monthNet": -5114,
+      "monthNet": -6375,
       "longDays": 7,
-      "shortDays": 11,
-      "n": 18
+      "shortDays": 12,
+      "n": 19
     }
   ],
   "stats": {

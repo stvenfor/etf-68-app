@@ -1,5 +1,11 @@
 import type { EChartsOption } from "echarts";
-import type { EtfRow, UiBundle } from "../types";
+import type {
+  BondPureFundRow,
+  BondTenorBucket,
+  BondYieldPoint,
+  EtfRow,
+  UiBundle,
+} from "../types";
 import { BOARD, echartsBase } from "./theme";
 
 const ACTION_ORDER = ["技术候选", "观察", "不追涨", "暂缓"];
@@ -314,6 +320,8 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
   if (!days.length) return null;
 
   const cats = days.map((d) => d.date.slice(5));
+  const hasOther = days.some((d) => d.otherTotal != null);
+  const hasGrand = days.some((d) => d.grandTotal != null);
   const hasIndex = days.some(
     (d) => d.shPct != null || d.szPct != null || d.cybPct != null || d.kcbPct != null
   );
@@ -326,7 +334,7 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.6, color: BOARD.up },
+          lineStyle: { width: 1.4, color: BOARD.up, type: "dashed" as const },
           itemStyle: { color: BOARD.up },
           data: days.map((d) => d.shPct ?? null),
         },
@@ -336,7 +344,7 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.6, color: "#1f7aaf" },
+          lineStyle: { width: 1.4, color: "#1f7aaf", type: "dashed" as const },
           itemStyle: { color: "#1f7aaf" },
           data: days.map((d) => d.szPct ?? null),
         },
@@ -346,7 +354,7 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.6, color: BOARD.warn },
+          lineStyle: { width: 1.4, color: BOARD.warn, type: "dashed" as const },
           itemStyle: { color: BOARD.warn },
           data: days.map((d) => d.cybPct ?? null),
         },
@@ -356,12 +364,79 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
           yAxisIndex: 1,
           smooth: true,
           showSymbol: false,
-          lineStyle: { width: 1.6, color: "#7c5cbf" },
+          lineStyle: { width: 1.4, color: "#7c5cbf", type: "dashed" as const },
           itemStyle: { color: "#7c5cbf" },
           data: days.map((d) => d.kcbPct ?? null),
         },
       ]
     : [];
+
+  const lotsSeries = [
+    {
+      name: "中信",
+      type: "line" as const,
+      yAxisIndex: 0,
+      smooth: true,
+      showSymbol: days.length < 40,
+      symbolSize: 5,
+      lineStyle: { width: 2.6, color: BOARD.accent },
+      itemStyle: { color: BOARD.accent },
+      areaStyle: {
+        color: {
+          type: "linear" as const,
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: "rgba(31,122,175,0.20)" },
+            { offset: 1, color: "rgba(31,122,175,0.02)" },
+          ],
+        },
+      },
+      data: days.map((d) => d.citicTotal ?? null),
+      markLine: {
+        silent: true,
+        symbol: "none",
+        lineStyle: { color: BOARD.border, type: "dashed" as const },
+        data: [{ yAxis: 0 }],
+        label: { show: false },
+      },
+      z: 3,
+    },
+    ...(hasOther
+      ? [
+          {
+            name: "其它机构",
+            type: "line" as const,
+            yAxisIndex: 0,
+            smooth: true,
+            showSymbol: days.length < 40,
+            symbolSize: 4,
+            lineStyle: { width: 2.2, color: BOARD.warn },
+            itemStyle: { color: BOARD.warn },
+            data: days.map((d) => d.otherTotal ?? null),
+            z: 2,
+          },
+        ]
+      : []),
+    ...(hasGrand
+      ? [
+          {
+            name: "总体合计",
+            type: "line" as const,
+            yAxisIndex: 0,
+            smooth: true,
+            showSymbol: days.length < 40,
+            symbolSize: 4,
+            lineStyle: { width: 2.4, color: BOARD.up },
+            itemStyle: { color: BOARD.up },
+            data: days.map((d) => d.grandTotal ?? null),
+            z: 2,
+          },
+        ]
+      : []),
+  ];
 
   return {
     ...echartsBase,
@@ -381,11 +456,14 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
         if (!list.length) return "";
         const idx = list[0].dataIndex as number;
         const day = days[idx];
-        const head = `${day?.date || ""}${day?.stance ? ` · ${day.stance}` : ""}`;
+        const head = `${day?.date || ""}${day?.stance ? ` · 中信${day.stance}` : ""}`;
         const lines = list.map((p: any) => {
           const v = p.value;
           if (v == null || Number.isNaN(v)) return `${p.marker}${p.seriesName}：—`;
-          if (p.seriesName === "中信净持仓") return `${p.marker}${p.seriesName}：${v}手`;
+          if (["中信", "其它机构", "总体合计"].includes(p.seriesName)) {
+            const n = Math.round(Number(v));
+            return `${p.marker}${p.seriesName}：${n > 0 ? "+" : ""}${n}手`;
+          }
           return `${p.marker}${p.seriesName}：${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
         });
         return [head, ...lines].join("<br/>");
@@ -394,7 +472,7 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
     xAxis: {
       type: "category",
       data: cats,
-      axisLabel: { color: BOARD.muted, fontSize: 10, interval: 0, rotate: days.length > 40 ? 35 : 0 },
+      axisLabel: { color: BOARD.muted, fontSize: 10, hideOverlap: true, rotate: days.length > 40 ? 35 : 0 },
       axisLine: { lineStyle: { color: BOARD.border } },
       axisTick: { show: false },
     },
@@ -421,41 +499,7 @@ export function citicLineOption(bundle: UiBundle): EChartsOption | null {
           ]
         : []),
     ],
-    series: [
-      {
-        name: "中信净持仓",
-        type: "line",
-        yAxisIndex: 0,
-        smooth: true,
-        showSymbol: days.length < 40,
-        symbolSize: 5,
-        lineStyle: { width: 2.5, color: BOARD.accent },
-        itemStyle: { color: BOARD.accent },
-        areaStyle: {
-          color: {
-            type: "linear",
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: "rgba(31,122,175,0.22)" },
-              { offset: 1, color: "rgba(31,122,175,0.02)" },
-            ],
-          },
-        },
-        data: days.map((d) => d.citicTotal ?? null),
-        markLine: {
-          silent: true,
-          symbol: "none",
-          lineStyle: { color: BOARD.border, type: "dashed" },
-          data: [{ yAxis: 0 }],
-          label: { show: false },
-        },
-        z: 3,
-      },
-      ...indexSeries,
-    ],
+    series: [...lotsSeries, ...indexSeries],
   };
 }
 
@@ -596,6 +640,284 @@ export function trendScoreRadarOption(
             itemStyle: { color: BOARD.accent },
           },
         ],
+      },
+    ],
+  };
+}
+
+/** 国债期限收益率曲线 */
+export function bondYieldCurveOption(points: BondYieldPoint[]): EChartsOption | null {
+  const rows = points.filter((p) => p.level != null && !Number.isNaN(p.level));
+  if (!rows.length) return null;
+  const cats = rows.map((p) => p.name.replace(/^国债/, ""));
+  const levels = rows.map((p) => p.level as number);
+  return {
+    ...echartsBase,
+    grid: { left: 48, right: 20, top: 28, bottom: 32 },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params;
+        const row = rows[p.dataIndex];
+        if (!row) return "";
+        const bp =
+          row.deltaBp == null
+            ? ""
+            : `<br/>Δ ${row.deltaBp > 0 ? "+" : ""}${Number(row.deltaBp).toFixed(1)}bp · ${row.move?.label || ""}`;
+        return `${row.name}<br/>收益率 ${Number(row.level).toFixed(4)}%${bp}`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      data: cats,
+      axisLabel: { color: BOARD.muted, fontSize: 12, fontWeight: 600 },
+      axisLine: { lineStyle: { color: BOARD.border } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      name: "%",
+      nameTextStyle: { color: BOARD.muted, fontSize: 11 },
+      scale: true,
+      splitLine: { lineStyle: { color: BOARD.split } },
+      axisLabel: {
+        color: BOARD.muted,
+        formatter: (v: number) => v.toFixed(2),
+      },
+    },
+    series: [
+      {
+        name: "收益率",
+        type: "line",
+        smooth: true,
+        symbol: "circle",
+        symbolSize: 10,
+        lineStyle: { width: 3, color: BOARD.accent },
+        itemStyle: { color: BOARD.accent, borderColor: "#fff", borderWidth: 2 },
+        areaStyle: {
+          color: {
+            type: "linear",
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: "rgba(31,122,175,0.22)" },
+              { offset: 1, color: "rgba(31,122,175,0.02)" },
+            ],
+          },
+        },
+        label: {
+          show: true,
+          position: "top",
+          color: BOARD.text,
+          fontSize: 11,
+          fontWeight: 700,
+          formatter: (p: any) => `${Number(p.value).toFixed(2)}%`,
+        },
+        data: levels,
+      },
+    ],
+  };
+}
+
+/** 国债当日 Δbp 柱图（上行红/丢蛋，下行绿/收蛋） */
+export function bondDeltaBpOption(points: BondYieldPoint[]): EChartsOption | null {
+  const rows = points.filter((p) => p.deltaBp != null && !Number.isNaN(p.deltaBp));
+  if (!rows.length) return null;
+  const cats = rows.map((p) => p.name.replace(/^国债/, ""));
+  const data = rows.map((p) => {
+    const v = p.deltaBp as number;
+    return {
+      value: v,
+      itemStyle: { color: v > 0 ? BOARD.up : v < 0 ? BOARD.down : BOARD.muted },
+    };
+  });
+  return {
+    ...echartsBase,
+    grid: { left: 48, right: 20, top: 28, bottom: 32 },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params;
+        const row = rows[p.dataIndex];
+        if (!row) return "";
+        const v = row.deltaBp as number;
+        return `${row.name}<br/>Δ ${v > 0 ? "+" : ""}${v.toFixed(1)}bp · ${row.move?.label || "—"}`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      data: cats,
+      axisLabel: { color: BOARD.muted, fontSize: 12, fontWeight: 600 },
+      axisLine: { lineStyle: { color: BOARD.border } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      name: "bp",
+      nameTextStyle: { color: BOARD.muted, fontSize: 11 },
+      splitLine: { lineStyle: { color: BOARD.split } },
+      axisLabel: { color: BOARD.muted },
+    },
+    series: [
+      {
+        name: "Δbp",
+        type: "bar",
+        barMaxWidth: 36,
+        data,
+        label: {
+          show: true,
+          position: "top",
+          color: BOARD.text,
+          fontSize: 11,
+          fontWeight: 700,
+          formatter: (p: any) => {
+            const v = Number(p.value);
+            return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
+          },
+        },
+        markLine: {
+          silent: true,
+          symbol: "none",
+          lineStyle: { color: BOARD.border, type: "dashed" },
+          data: [{ yAxis: 0 }],
+          label: { show: false },
+        },
+      },
+    ],
+  };
+}
+
+/** 利率债分档 + 信用债 收/丢蛋对比 */
+export function bondBucketEggsOption(
+  buckets: BondTenorBucket[],
+  creditEggs?: number | null
+): EChartsOption | null {
+  const cats: string[] = [];
+  const data: Array<{ value: number; itemStyle: { color: string } }> = [];
+  for (const b of buckets) {
+    const eggs = Number(b.move?.eggs ?? 0);
+    const side = b.move?.side || "flat";
+    const signed = side === "loss" ? -Math.abs(eggs) : side === "gain" ? Math.abs(eggs) : 0;
+    cats.push(b.label);
+    data.push({
+      value: signed,
+      itemStyle: {
+        color: signed > 0 ? BOARD.up : signed < 0 ? BOARD.down : BOARD.muted,
+      },
+    });
+  }
+  if (creditEggs != null && !Number.isNaN(creditEggs)) {
+    cats.push("信用债");
+    data.push({
+      value: creditEggs,
+      itemStyle: {
+        color: creditEggs > 0 ? BOARD.up : creditEggs < 0 ? BOARD.down : BOARD.muted,
+      },
+    });
+  }
+  if (!cats.length) return null;
+  return {
+    ...echartsBase,
+    grid: { left: 48, right: 16, top: 28, bottom: 32 },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params;
+        const v = Number(p.value);
+        if (v === 0) return `${p.name}<br/>平`;
+        return `${p.name}<br/>${v > 0 ? "收" : "丢"} ${Math.abs(v)} 蛋`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      data: cats,
+      axisLabel: { color: BOARD.muted, fontSize: 12, fontWeight: 600 },
+      axisLine: { lineStyle: { color: BOARD.border } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      name: "蛋",
+      nameTextStyle: { color: BOARD.muted, fontSize: 11 },
+      splitLine: { lineStyle: { color: BOARD.split } },
+      axisLabel: { color: BOARD.muted },
+    },
+    series: [
+      {
+        name: "收丢蛋",
+        type: "bar",
+        barMaxWidth: 40,
+        data,
+        label: {
+          show: true,
+          position: "top",
+          color: BOARD.text,
+          fontSize: 11,
+          fontWeight: 700,
+          formatter: (p: any) => {
+            const v = Number(p.value);
+            if (v === 0) return "平";
+            return `${v > 0 ? "收" : "丢"}${Math.abs(v)}`;
+          },
+        },
+        markLine: {
+          silent: true,
+          symbol: "none",
+          lineStyle: { color: BOARD.border, type: "dashed" },
+          data: [{ yAxis: 0 }],
+          label: { show: false },
+        },
+      },
+    ],
+  };
+}
+
+/** 纯债基金：久期 / 利率仓位横向对比 */
+export function bondPureFundBarsOption(rows: BondPureFundRow[]): EChartsOption | null {
+  if (!rows.length) return null;
+  const names = rows.map((r) => r.name.replace(/[ABC]$/, "") || r.code);
+  const durations = rows.map((r) => r.duration ?? 0);
+  const ratePos = rows.map((r) => r.ratePos ?? 0);
+  return {
+    ...echartsBase,
+    grid: { left: 110, right: 24, top: 28, bottom: 28 },
+    legend: {
+      top: 0,
+      right: 8,
+      icon: "circle",
+      itemWidth: 8,
+      textStyle: { color: BOARD.muted, fontSize: 11 },
+    },
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "value",
+      splitLine: { lineStyle: { color: BOARD.split } },
+      axisLabel: { color: BOARD.muted },
+    },
+    yAxis: {
+      type: "category",
+      data: names,
+      inverse: true,
+      axisLabel: { color: BOARD.text, fontSize: 11, width: 96, overflow: "truncate" },
+      axisTick: { show: false },
+      axisLine: { show: false },
+    },
+    series: [
+      {
+        name: "久期",
+        type: "bar",
+        barMaxWidth: 14,
+        itemStyle: { color: BOARD.accent, borderRadius: [0, 4, 4, 0] },
+        data: durations,
+      },
+      {
+        name: "利率债仓位",
+        type: "bar",
+        barMaxWidth: 14,
+        itemStyle: { color: "#7c5cbf", borderRadius: [0, 4, 4, 0] },
+        data: ratePos,
       },
     ],
   };

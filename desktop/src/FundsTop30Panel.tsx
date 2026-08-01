@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fmtNum, fmtPct } from "./filters";
+import { fmtNum, fmtPct, formatEstimateTimeDisplay } from "./filters";
 import type { FundTop30Row, FundsTop30Bundle } from "./types";
 
 const CATEGORY_ORDER = ["equity", "bond", "hybrid", "qdii"] as const;
@@ -70,9 +70,7 @@ function groupRows(rows: FundTop30Row[]): Array<{ key: string; label: string; ro
 }
 
 function shortTime(v?: string | null): string {
-  if (!v) return "—";
-  const m = v.match(/(\d{2}:\d{2}:\d{2})/);
-  return m ? m[1] : v;
+  return formatEstimateTimeDisplay(v);
 }
 
 export default function FundsTop30Panel() {
@@ -230,7 +228,7 @@ export default function FundsTop30Panel() {
                       <col className="col-chg" />
                       <col className="col-date" />
                       <col className="col-est" />
-                      <col className="col-chg" />
+                      <col className="col-est-chg" />
                       <col className="col-time" />
                     </colgroup>
                     <thead>
@@ -244,27 +242,36 @@ export default function FundsTop30Panel() {
                         <th className="num">净值涨跌</th>
                         <th>净值日</th>
                         <th className="num">实时估值</th>
-                        <th className="num">估值涨跌值</th>
+                        <th className="num">估值涨跌</th>
                         <th>估值时间</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {g.rows.map((r) => {
-                        const tip = [r.adviceDetail, r.adviceRisk ? `风险：${r.adviceRisk}` : null]
-                          .filter(Boolean)
-                          .join("\n");
-                        return (
-                          <tr key={`${r.category}-${r.code}`} title={r.error || tip || undefined}>
+                      {g.rows.map((r) => (
+                          <tr key={`${r.category}-${r.code}`}>
                             <td className="num">{r.rankInCategory ?? "—"}</td>
                             <td className="mono">{r.code}</td>
-                            <td className="funds30-name">
+                            <td className="funds30-name" title={r.name}>
                               {r.name}
                               {r.error ? <span className="funds30-err"> · 净值异常</span> : null}
                             </td>
-                            <td>
-                              <span className={`pill ${adviceTone(r.advice || "观望")}`} title={tip || undefined}>
-                                {r.advice || "—"}
-                              </span>
+                            <td className="funds30-advice-cell">
+                              <div className="funds30-advice-stack">
+                                <span className={`pill ${adviceTone(r.advice || "观望")}`}>
+                                  {r.advice || "—"}
+                                </span>
+                                {r.adviceDetail ? (
+                                  <div className="funds30-advice-detail">{r.adviceDetail}</div>
+                                ) : null}
+                                {r.adviceRisk ? (
+                                  <div className="funds30-advice-detail funds30-advice-risk">
+                                    风险：{r.adviceRisk}
+                                  </div>
+                                ) : null}
+                                {r.error ? (
+                                  <div className="funds30-advice-detail funds30-advice-risk">{r.error}</div>
+                                ) : null}
+                              </div>
                             </td>
                             <td className="num">{fmtNum(r.aumYi ?? null, 2)}</td>
                             <td className="num">{fmtNum(r.nav ?? null, 4)}</td>
@@ -272,12 +279,9 @@ export default function FundsTop30Panel() {
                             <td className="mono">{r.navDate || "—"}</td>
                             <td className="num">{fmtNum(r.estimateNav ?? null, 4)}</td>
                             <td className={toneClass(r.estimateChangePct)}>{fmtPct(r.estimateChangePct ?? null, 2)}</td>
-                            <td className="mono" title={r.estimateTime || undefined}>
-                              {shortTime(r.estimateTime)}
-                            </td>
+                            <td className="mono funds30-time">{shortTime(r.estimateTime)}</td>
                           </tr>
-                        );
-                      })}
+                        ))}
                     </tbody>
                   </table>
                 </div>

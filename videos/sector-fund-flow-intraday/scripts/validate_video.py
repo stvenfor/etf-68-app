@@ -31,8 +31,13 @@ def main() -> None:
     audio_streams = [s for s in probe["streams"] if s["codec_type"] == "audio"]
     if len(video_streams) != 1:
         raise SystemExit(f"Expected one video stream, got {len(video_streams)}")
-    if audio_streams:
-        raise SystemExit("Unexpected audio stream; render with --muted when no audio is used")
+    # Silent AAC is required for Cursor/QuickTime preview continuity; reject extra tracks.
+    if len(audio_streams) > 1:
+        raise SystemExit(f"Expected at most one audio stream, got {len(audio_streams)}")
+    if audio_streams and audio_streams[0].get("codec_name") not in ("aac", "mp3"):
+        raise SystemExit(
+            f"Unexpected audio codec={audio_streams[0].get('codec_name')!r}; use silent AAC"
+        )
     stream = video_streams[0]
     duration = float(stream.get("duration") or probe["format"]["duration"])
     expected = {
@@ -79,6 +84,7 @@ def main() -> None:
         "pixelFormat": stream["pix_fmt"],
         "colorSpace": color_space,
         "fastStart": True,
+        "hasSilentAudio": bool(audio_streams),
     }, ensure_ascii=False, indent=2))
 
 

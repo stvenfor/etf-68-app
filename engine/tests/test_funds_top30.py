@@ -14,6 +14,7 @@ from src.funds_top30 import (
     QUOTA,
     approx_aum_yi,
     build_funds_top30,
+    cap_estimate_clock_for_display,
     is_excluded_name_code,
     parse_pingzhong_nav,
     parse_sina_fund_quote,
@@ -233,6 +234,11 @@ class FundsTop30BuildTest(unittest.TestCase):
             self.assertAlmostEqual(row.get("estimateChange") or 0, 0.016)  # 1.25 - 1.234
             self.assertAlmostEqual(row.get("estimateChangePct") or 0, 1.2966, places=3)
             self.assertTrue(row.get("estimateTime"))
+            self.assertNotIn("刷新", row.get("estimateTime") or "")
+            self.assertNotIn("·", row.get("estimateTime") or "")
+            # Quote clock 15:00 is capped to 14:50 for display; raw kept in estimateQuoteTime.
+            self.assertEqual(row.get("estimateTime"), "2026-07-24 14:50:00")
+            self.assertEqual(row.get("estimateQuoteTime"), "2026-07-24 15:00:00")
             self.assertIn(row.get("advice"), {"可关注", "相对友好", "观望", "不追高", "暂缓"})
             self.assertTrue(row.get("adviceDetail"))
             self.assertTrue(row.get("adviceRisk"))
@@ -275,6 +281,19 @@ class FundsTop30BuildTest(unittest.TestCase):
         # empty fu_ (e.g. some bond funds)
         with self.assertRaises(ValueError):
             parse_sina_fund_quote('var hq_str_fu_000385="";', "000385")
+
+    def test_cap_estimate_clock_at_1450(self) -> None:
+        self.assertEqual(cap_estimate_clock_for_display("2026-07-24 14:49:30"), "2026-07-24 14:49:30")
+        self.assertEqual(cap_estimate_clock_for_display("2026-07-24 14:50:00"), "2026-07-24 14:50:00")
+        self.assertEqual(cap_estimate_clock_for_display("2026-07-24 15:00:00"), "2026-07-24 14:50:00")
+        self.assertEqual(cap_estimate_clock_for_display("2026-07-27 16:04:00"), "2026-07-27 14:50:00")
+        from src.funds_top30 import format_estimate_time_only
+
+        self.assertEqual(format_estimate_time_only("2026-07-27 16:04:00 · 刷新09:35"), "2026-07-27 14:50:00")
+        # time-only uses today + capped clock
+        out = format_estimate_time_only("16:04:00")
+        self.assertTrue(out.endswith("14:50:00"), out)
+
 
 if __name__ == "__main__":
     unittest.main()

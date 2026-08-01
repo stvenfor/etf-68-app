@@ -278,6 +278,30 @@ ipcMain.handle("refresh-my-holdings", async () => {
   }
 });
 
+ipcMain.handle("refresh-board", async (_event, payload = {}) => {
+  const args = ["cli_app.py", "refresh-board"];
+  if (payload.historical) args.push("--historical");
+  if (payload.withNews) args.push("--with-news");
+  try {
+    const { stdout } = await runPython(args);
+    const line = stdout.trim().split(/\r?\n/).pop();
+    const parsed = JSON.parse(line);
+    if (!parsed.ok) return parsed;
+    const latest = path.join(outDir(), "latest.json");
+    if (!fs.existsSync(latest)) {
+      return { ok: false, error: "latest_missing_after_refresh_board" };
+    }
+    return {
+      ok: true,
+      bundle: JSON.parse(fs.readFileSync(latest, "utf8")),
+      marketBoard: parsed.marketBoard || null,
+      fetchedAt: parsed.marketBoard?.fetchedAt || null,
+    };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
 ipcMain.handle("speak-text", async (_event, payload = {}) => {
   const text = String(payload.text || "").trim();
   if (!text) return { ok: false, error: "empty_text" };
