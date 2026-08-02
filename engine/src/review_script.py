@@ -71,6 +71,7 @@ def _short_title(title: str, limit: int = 18) -> str:
 
 
 def sector_averages(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Legacy helper: average ETF-pool ret1 by label. Not used for review 板块章."""
     buckets: dict[str, list[float]] = defaultdict(list)
     for row in rows:
         sector = str(row.get("sector") or "").strip() or "未分类"
@@ -92,6 +93,7 @@ def sector_averages(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def top_bottom_sectors(avgs: list[dict[str, Any]], n: int = 3) -> dict[str, list[dict[str, Any]]]:
+    """Legacy helper for ETF-label averages. Review video uses industry boards."""
     if not avgs:
         return {"gainers": [], "losers": []}
     gainers = avgs[:n]
@@ -195,14 +197,13 @@ def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
     days = [d for d in days if d.get("date")]
     days.sort(key=lambda d: str(d.get("date")))
     by_date = {str(d["date"]): d for d in days}
+    # Exact dataDate only — never fall back to a prior trading day.
     cur = by_date.get(day)
-    if not cur:
-        # nearest on or before dataDate
-        prior = [d for d in days if str(d["date"]) <= day]
-        cur = prior[-1] if prior else None
     if not cur:
         return {"ok": False, "error": "citic_day_missing", "date": day}
     cur_date = str(cur["date"])
+    if cur_date != day:
+        return {"ok": False, "error": "citic_day_mismatch", "date": day}
     earlier = [d for d in days if str(d["date"]) < cur_date]
     prev = earlier[-1] if earlier else None
     cur_total = _num(cur.get("citicTotal"))
@@ -238,6 +239,17 @@ def citic_change(bundle: dict[str, Any]) -> dict[str, Any]:
 
     if other_total is None and grand_total is not None and cur_total is not None:
         other_total = grand_total - cur_total
+
+    # Require parseable daily totals for the exact review day.
+    if cur_total is None or other_total is None or grand_total is None:
+        return {
+            "ok": False,
+            "error": "citic_day_incomplete",
+            "date": day,
+            "citicTotal": cur_total,
+            "otherTotal": other_total,
+            "grandTotal": grand_total,
+        }
 
     ym = cur_date[:7]
     month_row: dict[str, Any] | None = None
@@ -295,10 +307,8 @@ def _event_key(ev: dict[str, Any]) -> str:
 def collect_news(
     bundle: dict[str, Any],
     n: int = 5,
-    *,
-    lookback_days: int = 5,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Pick newest substantive bullish/bearish headlines (prefer recent dates)."""
+    """Pick substantive headlines dated exactly on bundle dataDate (no lookback filler)."""
     pos: dict[str, dict[str, Any]] = {}
     neg: dict[str, dict[str, Any]] = {}
     as_of = str(bundle.get("dataDate") or "").strip()
@@ -306,13 +316,14 @@ def collect_news(
     def _ingest(bucket: dict[str, dict[str, Any]], ev: dict[str, Any]) -> None:
         key = _event_key(ev)
         title = str(ev.get("title") or "").strip()
-        if not key or not title:
+        ev_date = str(ev.get("date") or "").strip()
+        if not key or not title or not as_of or ev_date != as_of:
             return
         cur = bucket.get(key)
-        if cur is None or str(ev.get("date") or "") >= str(cur.get("date") or ""):
+        if cur is None or ev_date >= str(cur.get("date") or ""):
             bucket[key] = {
                 "title": title,
-                "date": ev.get("date"),
+                "date": ev_date,
                 "impact": ev.get("impact"),
                 "sourceKey": key,
             }
@@ -327,42 +338,27 @@ def collect_news(
             if isinstance(ev, dict):
                 _ingest(neg, ev)
 
-    # Prefer events on/after (as_of - lookback). Floor date as YYYY-MM-DD string compare.
-    min_date = ""
-    if as_of and lookback_days > 0:
-        try:
-            from datetime import date, timedelta
-
-            d0 = date.fromisoformat(as_of[:10])
-            min_date = (d0 - timedelta(days=lookback_days)).isoformat()
-        except ValueError:
-            min_date = ""
-
     def _sort_take(items: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         arr = list(items.values())
-        # live_ keys and newer dates first
+        # Prefer live_ keys when dates are equal (all are dataDate).
         arr.sort(
             key=lambda x: (
-                str(x.get("date") or ""),
                 1 if str(x.get("sourceKey") or "").startswith("live_") else 0,
+                str(x.get("sourceKey") or ""),
             ),
             reverse=True,
         )
         seen_titles: set[str] = set()
-        fresh: list[dict[str, Any]] = []
-        older: list[dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
         for ev in arr:
             t = str(ev["title"])
             if t in seen_titles:
                 continue
             seen_titles.add(t)
-            d = str(ev.get("date") or "")
-            if min_date and d and d < min_date:
-                older.append(ev)
-            else:
-                fresh.append(ev)
-        out = fresh + older
-        return out[:n]
+            out.append(ev)
+            if len(out) >= n:
+                break
+        return out
 
     return {"positive": _sort_take(pos), "negative": _sort_take(neg)}
 
@@ -390,15 +386,40 @@ def build_chapters(
     bundle: dict[str, Any],
     *,
     market_board: dict[str, Any] | None = None,
+    industry_sectors: dict[str, Any] | None = None,
     fetch_market: bool = True,
 ) -> dict[str, Any]:
     day = str(bundle.get("dataDate") or "")
     rows = list(bundle.get("rows") or [])
     breadth = _num(bundle.get("breadthPct"))
-    sectors = top_bottom_sectors(sector_averages(rows), 3)
     citic = citic_change(bundle)
     news = collect_news(bundle, 5)
     cands = technical_candidates(rows, 5)
+
+    # 板块均涨跌 = 东财行业板块涨跌幅，禁止用代表池 ETF 标签均值冒充板块。
+    if industry_sectors is not None:
+        sectors = industry_sectors
+    elif fetch_market:
+        try:
+            from src.industry_boards import build_industry_sector_ranks
+
+            sectors = build_industry_sector_ranks(n=3)
+        except Exception as exc:  # noqa: BLE001 — soft-fail
+            sectors = {
+                "gainers": [],
+                "losers": [],
+                "source": "eastmoney_industry",
+                "ok": False,
+                "error": str(exc)[:160],
+            }
+    else:
+        sectors = {
+            "gainers": [],
+            "losers": [],
+            "source": "eastmoney_industry",
+            "ok": False,
+            "skipped": True,
+        }
 
     # Visual-only open board (turnover + indices); never added to narration.
     if market_board is not None:
@@ -429,40 +450,6 @@ def build_chapters(
     if not g_parts and not l_parts:
         sector_line += "暂无板块收益数据。"
 
-    def _lots_txt(v: Any) -> str:
-        n = _num(v)
-        if n is None:
-            return "暂无"
-        return f"{int(n)}手"
-
-    if citic.get("ok"):
-        citic_line = (
-            "持仓量变动。"
-            + _daily_stance_phrase("中信", citic.get("citicTotal"), citic.get("stance"))
-            + "；"
-            + _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance"))
-            + "；"
-            + _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance"))
-            + "；"
-            + _month_net_phrase(citic.get("monthNet"))
-            + "。"
-        )
-    else:
-        citic_line = "持仓量变动。暂无当日持仓数据。"
-
-    # 口播用完整标题，避免省略导致遗漏
-    pos_titles = [str(e["title"]).strip() for e in news["positive"] if str(e.get("title") or "").strip()]
-    neg_titles = [str(e["title"]).strip() for e in news["negative"] if str(e.get("title") or "").strip()]
-    news_line = "实质消息。"
-    if pos_titles:
-        news_line += "利好：" + "；".join(pos_titles) + "。"
-    else:
-        news_line += "利好暂无。"
-    if neg_titles:
-        news_line += "利空：" + "；".join(neg_titles) + "。"
-    else:
-        news_line += "利空暂无。"
-
     if cands:
         c_parts = []
         for c in cands:
@@ -475,11 +462,11 @@ def build_chapters(
 
     close_line = "复盘结束。数据来源于网络，仅供参考。"
 
-    chapters = [
+    chapters: list[dict[str, Any]] = [
         {
             "id": "open",
             "title": "开场",
-            "kicker": "01 · 日期",
+            "kicker": "日期",
             "budget_s": CHAPTER_BUDGETS["open"],
             "narration": open_line,
             "caption": f"复盘 · {day}",
@@ -491,7 +478,7 @@ def build_chapters(
         {
             "id": "sectors",
             "title": "板块均涨跌",
-            "kicker": "02 · 板块",
+            "kicker": "板块",
             "budget_s": CHAPTER_BUDGETS["sectors"],
             "narration": sector_line,
             "caption": "板块：涨前三 / 跌前三",
@@ -500,55 +487,91 @@ def build_chapters(
                 + [f"↓ {x['sector']} {_fmt_pct(x['avgRet1'])}" for x in sectors["losers"]]
             ),
         },
-        {
-            "id": "citic",
-            "title": "持仓量变动",
-            "kicker": "03 · 持仓",
-            "budget_s": CHAPTER_BUDGETS["citic"],
-            "narration": citic_line,
-            "caption": "中信 / 其它机构 / 总体 / 本月",
-            "bullets": [
-                _daily_stance_phrase("中信多空", citic.get("citicTotal"), citic.get("stance")),
-                _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance")),
-                _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance")),
-                _month_net_phrase(citic.get("monthNet")),
-            ],
-        },
-        {
-            "id": "news",
-            "title": "实质消息",
-            "kicker": "04 · 消息",
-            "budget_s": CHAPTER_BUDGETS["news"],
-            "narration": news_line,
-            "caption": "实质利好 / 利空 各五",
-            "bullets": (
-                [f"利好 · {_short_title(str(e['title']), 22)}" for e in news["positive"]]
-                + [f"利空 · {_short_title(str(e['title']), 22)}" for e in news["negative"]]
-            ),
-        },
-        {
-            "id": "candidates",
-            "title": "技术候选",
-            "kicker": "05 · 候选",
-            "budget_s": CHAPTER_BUDGETS["candidates"],
-            "narration": cand_line,
-            "caption": "技术面筛选候选 · 涨跌百分比",
-            "bullets": [
-                f"{_etf_label(c['name'], c['code'])} 日{_fmt_pct(c['ret1'])}/5日{_fmt_pct(c['ret5'])}"
-                for c in cands
-            ]
-            or ["今日暂无技术候选"],
-        },
-        {
-            "id": "close",
-            "title": "收束",
-            "kicker": "06 · 结束",
-            "budget_s": CHAPTER_BUDGETS["close"],
-            "narration": close_line,
-            "caption": "数据梳理 · 非投资建议",
-            "bullets": ["上看状态", "中看页签", "下看明细"],
-        },
     ]
+
+    # Exact-day citic only — omit chapter when missing/incomplete (no「暂无」占位).
+    if citic.get("ok"):
+        citic_line = (
+            "持仓量变动。"
+            + _daily_stance_phrase("中信", citic.get("citicTotal"), citic.get("stance"))
+            + "；"
+            + _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance"))
+            + "；"
+            + _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance"))
+            + "；"
+            + _month_net_phrase(citic.get("monthNet"))
+            + "。"
+        )
+        chapters.append(
+            {
+                "id": "citic",
+                "title": "持仓量变动",
+                "kicker": "持仓",
+                "budget_s": CHAPTER_BUDGETS["citic"],
+                "narration": citic_line,
+                "caption": "中信 / 其它机构 / 总体 / 本月",
+                "bullets": [
+                    _daily_stance_phrase("中信多空", citic.get("citicTotal"), citic.get("stance")),
+                    _daily_stance_phrase("其它机构", citic.get("otherTotal"), citic.get("otherStance")),
+                    _daily_stance_phrase("总体", citic.get("grandTotal"), citic.get("grandStance")),
+                    _month_net_phrase(citic.get("monthNet")),
+                ],
+            }
+        )
+
+    # Exact-day news only — omit whole chapter when both sides empty; no「暂无」两侧占位.
+    pos_titles = [str(e["title"]).strip() for e in news["positive"] if str(e.get("title") or "").strip()]
+    neg_titles = [str(e["title"]).strip() for e in news["negative"] if str(e.get("title") or "").strip()]
+    if pos_titles or neg_titles:
+        news_line = "实质消息。"
+        if pos_titles:
+            news_line += "利好：" + "；".join(pos_titles) + "。"
+        if neg_titles:
+            news_line += "利空：" + "；".join(neg_titles) + "。"
+        chapters.append(
+            {
+                "id": "news",
+                "title": "实质消息",
+                "kicker": "消息",
+                "budget_s": CHAPTER_BUDGETS["news"],
+                "narration": news_line,
+                "caption": "实质利好 / 利空",
+                "bullets": (
+                    [f"利好 · {_short_title(str(e['title']), 22)}" for e in news["positive"]]
+                    + [f"利空 · {_short_title(str(e['title']), 22)}" for e in news["negative"]]
+                ),
+            }
+        )
+
+    chapters.extend(
+        [
+            {
+                "id": "candidates",
+                "title": "技术候选",
+                "kicker": "候选",
+                "budget_s": CHAPTER_BUDGETS["candidates"],
+                "narration": cand_line,
+                "caption": "技术面筛选候选 · 涨跌百分比",
+                "bullets": [
+                    f"{_etf_label(c['name'], c['code'])} 日{_fmt_pct(c['ret1'])}/5日{_fmt_pct(c['ret5'])}"
+                    for c in cands
+                ]
+                or ["今日暂无技术候选"],
+            },
+            {
+                "id": "close",
+                "title": "收束",
+                "kicker": "结束",
+                "budget_s": CHAPTER_BUDGETS["close"],
+                "narration": close_line,
+                "caption": "数据梳理 · 非投资建议",
+                "bullets": ["上看状态", "中看页签", "下看明细"],
+            },
+        ]
+    )
+
+    for i, ch in enumerate(chapters, start=1):
+        ch["kicker"] = f"{i:02d} · {ch['kicker']}"
 
     full_narration = "".join(ch["narration"] for ch in chapters)
     return {
@@ -570,8 +593,14 @@ def build_review_script(
     bundle: dict[str, Any],
     *,
     market_board: dict[str, Any] | None = None,
+    industry_sectors: dict[str, Any] | None = None,
     fetch_market: bool = True,
 ) -> dict[str, Any]:
     if not bundle or not bundle.get("dataDate"):
         return {"ok": False, "error": "missing_bundle"}
-    return build_chapters(bundle, market_board=market_board, fetch_market=fetch_market)
+    return build_chapters(
+        bundle,
+        market_board=market_board,
+        industry_sectors=industry_sectors,
+        fetch_market=fetch_market,
+    )

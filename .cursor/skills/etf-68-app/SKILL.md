@@ -18,6 +18,7 @@ description: >-
 |------|-----|
 | 目录 / CLI / 环境变量 / 数据产物 | [reference.md](reference.md) |
 | 复盘 MP4（HyperFrames → OpenCut） | [daily-review-video.md](daily-review-video.md) |
+| PMI 宏观快评（独立竖版，非日更六章） | [macro-flash-video.md](macro-flash-video.md) |
 
 ## 快速启动
 
@@ -79,10 +80,14 @@ engine/reports/   技术面 / 边缘条件 / 回测 / 事件矩阵 JSON
 5. 右上角固定：`数据来源于网络，不构成投资建议`。
 6. 水印：`小哈的一天快乐`；需封面帧 + 中英文字幕（上中下英）+ 底部章节进度条（高 30px，章标题在条内）。
 7. 终剪交付走 **OpenCut**；桌面版须用持久 Chrome Profile，否则草稿丢失。
+8. **生成复盘视频前必须用最新全量数据**（硬性）：禁止只跑 `review-script` 复用旧的 `latest.json` / 持仓 / 30 公募。须先 `generate`（或等价地刷新 ETF 日更 + `funds-top30` + `my-holdings`），确认 `data/out/latest.json`、`funds-top30.json`、`my-holdings.json` 的 `dataDate`/`asOf` 为当日（或最新交易日）后，再 `review-script` → 成片。详见 [daily-review-video.md](daily-review-video.md)。
 
-章节顺序：`开场 → 板块 → 持仓量变动（子项仍含中信多空 / 其它机构 / 当日总计） → 消息 → 技术候选 → 收束`。
+章节顺序：`开场 → 板块 → 持仓量变动 → 消息 → 技术候选 → 收束`（持仓/消息无精确日数据时**整章省略**，kicker 按实际章序重编号）。
 
-「技术候选」= 技术面规则筛出的候选 ETF（`action=技术候选`）；口播/画面标题用「技术候选」，勿写「技术候选资金」。持仓章总标题为「持仓量变动」，子卡片「中信多空」不变；当日三项口播互斥为「净加空xx手 / 净加多xx手 / 持平」（不同时念两边），并追加「本月总体净空/净多」（`monthNet`）。实质消息口播用完整标题（不截断）。生成复盘脚本时会 soft-refresh 实质消息，优先近几日 live 头条。口播默认合成后再 **atempo 1.2×** 提速（动效按时长对齐）。
+9. **持仓量变动 / 实质消息严格按复盘日 `dataDate` 入镜**（硬性）：`date` 必须等于口播「数据日期」；禁止回退到最近交易日、禁止 lookback 旧闻充数。缺精确日完整数据则**不进视频**（不口播「暂无当日…」）。消息仅利好或仅利空有当日条目时只播有数据的一侧。soft-refresh 可拉最新源，但入镜仍按 `dataDate` 精确过滤。
+10. **板块均涨跌 = 东财「行业板块」涨跌幅**（硬性）：取全市场行业板块涨/跌前三，**禁止**用代表池 ETF 的 `sector` 标签均值冒充板块（单票伪板块）。实现见 `engine/src/industry_boards.py`。
+
+「技术候选」= 技术面规则筛出的候选 ETF（`action=技术候选`）；口播/画面标题用「技术候选」，勿写「技术候选资金」。持仓章总标题为「持仓量变动」，子卡片「中信多空」不变；当日三项口播互斥为「净加空xx手 / 净加多xx手 / 持平」（不同时念两边），并追加「本月总体净空/净多」（`monthNet`）。实质消息口播用完整标题（不截断）。口播默认合成后再 **atempo 1.2×** 提速（动效按时长对齐）。
 
 ## 常用 CLI
 
@@ -98,6 +103,11 @@ python3.12 cli_app.py tts --text "测试旁白" --output /tmp/t.mp3
 
 # 复盘口播 JSON
 python3.12 cli_app.py review-script --output ../data/out/review_script.json
+
+# PMI 宏观快评（独立竖版产品线）
+python3.12 cli_app.py macro-pmi --month 2026-07
+python3.12 cli_app.py macro-flash-script --month 2026-07 --tone neutral \
+  --output ~/Desktop/work/videos/etf68-macro-flash/macro_flash_script.json
 
 # 30 公募代表池
 python3.12 cli_app.py funds-top30 --rebuild

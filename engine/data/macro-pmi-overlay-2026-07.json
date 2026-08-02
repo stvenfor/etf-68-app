@@ -1,0 +1,83 @@
+{
+  "month": "2026-07",
+  "composite": 49.3,
+  "compositePrev": 50.6,
+  "syncContract": true,
+  "forwardWindowMonth": "2026-08",
+  "notes": [
+    "综合PMI与分项来自国家统计局通稿，东财基础表仅含制造/非制造"
+  ],
+  "details": [
+    {
+      "id": "new_orders",
+      "label": "新订单指数",
+      "value": 48.5,
+      "prev": 51.2,
+      "note": "月降2.7pp 逾三年最低"
+    },
+    {
+      "id": "export_orders",
+      "label": "出口新订单",
+      "value": 49.6,
+      "prev": 50.8,
+      "note": "月降1.2pp 转入收缩"
+    },
+    {
+      "id": "hi_tech",
+      "label": "高技术制造PMI",
+      "value": 53.3,
+      "prev": null,
+      "note": "计算机通信电子领跑"
+    },
+    {
+      "id": "equipment",
+      "label": "装备制造PMI",
+      "value": 51.4,
+      "prev": null,
+      "note": "通用设备需求旺盛"
+    },
+    {
+      "id": "consumer",
+      "label": "消费品PMI",
+      "value": 47.8,
+      "prev": null,
+      "note": "内需疲软 深度收缩"
+    },
+    {
+      "id": "energy_heavy",
+      "label": "高耗能行业PMI",
+      "value": 47.0,
+      "prev": null,
+      "note": "房地产链条拖累"
+    },
+    {
+      "id": "construction",
+      "label": "建筑业PMI",
+      "value": 47.0,
+      "prev": null,
+      "note": "历史次低"
+    }
+  ],
+  "interpretation": [
+    "七月有传统淡季与极端天气因素，官方口径可解释部分回落",
+    "新订单大幅下滑更指向需求走弱，不宜全部归因于季节",
+    "高技术与装备仍扩张，消费品与高耗能收缩，结构分化明显"
+  ],
+  "signals": [
+    {
+      "label": "下一月PMI",
+      "value": "是否回到荣枯线之上",
+      "note": "确认季节扰动还是趋势走弱"
+    },
+    {
+      "label": "出口增速",
+      "value": "是否明显回落",
+      "note": "外需对制造业支撑是否减弱"
+    },
+    {
+      "label": "地产与建筑",
+      "value": "跌速是否加快",
+      "note": "居民端消费与信贷信心"
+    }
+  ]
+}

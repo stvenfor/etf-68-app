@@ -625,6 +625,74 @@ def cmd_my_holdings(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_macro_pmi(args: argparse.Namespace) -> int:
+    """Fetch Eastmoney PMI snapshot (+ optional curated overlay) to data/out."""
+    from src.macro_pmi import fetch_macro_pmi, write_macro_pmi
+
+    month = args.month
+    out = Path(args.output) if args.output else (
+        OUT_DIR / (f"macro-pmi-{month}.json" if month else "macro-pmi-latest.json")
+    )
+    try:
+        snap = fetch_macro_pmi(month)
+        if not snap.get("ok"):
+            print(json.dumps(snap, ensure_ascii=False))
+            return 1
+        write_macro_pmi(out, snap)
+        # Also refresh latest pointer when month omitted or explicit
+        latest = OUT_DIR / "macro-pmi-latest.json"
+        if out.resolve() != latest.resolve():
+            write_macro_pmi(latest, snap)
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "month": snap.get("month"),
+                    "manufacturing": (snap.get("manufacturing") or {}).get("value"),
+                    "nonManufacturing": (snap.get("nonManufacturing") or {}).get("value"),
+                    "composite": (snap.get("composite") or {}).get("value")
+                    if isinstance(snap.get("composite"), dict)
+                    else None,
+                    "outputPath": str(out),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_macro_flash_script(args: argparse.Namespace) -> int:
+    """Build macro-flash narration JSON from a PMI snapshot."""
+    from src.macro_flash_script import build_macro_flash_script
+    from src.macro_pmi import fetch_macro_pmi
+
+    if args.snapshot:
+        path = Path(args.snapshot)
+        if not path.exists():
+            print(json.dumps({"ok": False, "error": f"snapshot_missing:{path}"}, ensure_ascii=False))
+            return 1
+        snap = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        snap = fetch_macro_pmi(args.month)
+        if snap.get("ok"):
+            OUT_DIR.mkdir(parents=True, exist_ok=True)
+            (OUT_DIR / "macro-pmi-latest.json").write_text(
+                json.dumps(snap, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+
+    result = build_macro_flash_script(snap, tone=args.tone)
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        result = {**result, "outputPath": str(out)}
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_review_script(args: argparse.Namespace) -> int:
     """Build daily market-review narration JSON from a UiBundle."""
     from src.review_script import build_review_script
@@ -922,6 +990,35 @@ def main() -> int:
         help="Optional path to write the review-script JSON",
     )
     p_rev.set_defaults(func=cmd_review_script)
+
+    p_pmi = sub.add_parser("macro-pmi", help="Fetch China PMI snapshot (Eastmoney + overlay)")
+    p_pmi.add_argument("--month", default=None, help="YYYY-MM (default: latest in feed)")
+    p_pmi.add_argument(
+        "--output",
+        default=None,
+        help="Output JSON (default: data/out/macro-pmi-{month}.json)",
+    )
+    p_pmi.set_defaults(func=cmd_macro_pmi)
+
+    p_flash = sub.add_parser("macro-flash-script", help="Build PMI macro-flash narration JSON")
+    p_flash.add_argument("--month", default=None, help="YYYY-MM; fetches PMI if no --snapshot")
+    p_flash.add_argument(
+        "--snapshot",
+        default=None,
+        help="Path to macro-pmi JSON (skip network)",
+    )
+    p_flash.add_argument(
+        "--tone",
+        choices=("neutral", "caution"),
+        default="neutral",
+        help="Metaphor tone (default neutral; avoids copying viral hooks)",
+    )
+    p_flash.add_argument(
+        "--output",
+        default=None,
+        help="Optional path to write macro_flash_script.json",
+    )
+    p_flash.set_defaults(func=cmd_macro_flash_script)
 
     p_funds = sub.add_parser("funds-top30", help="Build/refresh 30 open-end fund pool + NAV")
     p_funds.add_argument(

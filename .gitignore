@@ -16,3 +16,20 @@ videos/*/out/
 .env
 .venv/
 venv/
+# Reference media (large); keep markdown storyboards tracked
+references/*.mp4
+references/*.wav
+references/frames/
+references/slides/
+references/ffprobe.json
+references/shuzisniper-pmi-*.json
+references/shuzisniper-pmi-*.srt
+references/shuzisniper-pmi-*.tsv
+references/shuzisniper-pmi-*.vtt
+references/shuzisniper-pmi-*.txt
+# Local media dumps / voice-clone binaries (keep *.py tracked)
+data/*.mp4
+data/voice-clone/**/*.wav
+data/voice-clone/**/*.mp3
+data/voice-clone/**/*.pth
+data/voice-clone/OpenVoice/

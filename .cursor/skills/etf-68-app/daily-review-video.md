@@ -9,18 +9,45 @@
 ## 端到端流程
 
 ```
-UiBundle (latest.json)
+【必先】cli_app.py generate     → latest.json + funds-top30.json + my-holdings.json（最新全量）
     → cli_app.py review-script → review_script.json
     → build_composition.py     → index.html + assets/vo/*.wav + audio_meta.json
-    → hyperframes render       → out/etf68-daily-review-{day}.mp4
-    → export_opencut_package.py → opencut-media/（分章 clips + master + IMPORT.md）
+    → hyperframes render       → out/etf68-daily-review-portrait.mp4（1080 高码率）
+    → ffmpeg scale 2K          → ~/Desktop/ETF68-市场复盘-{day}-竖版.mp4
+    → export_opencut_package.py → opencut-media/（可选）
     → OpenCut 微调导出（可选）
-    → 复制成片到 ~/Desktop/ETF68-市场复盘-{day}.mp4
 ```
 
-### 1. 生成脚本 JSON
+### 0. 最新全量数据（硬性，禁止跳过）
+
+用户要求「生成今日/复盘视频」时，**必须先刷新全量数据**，禁止直接用旧 `latest.json` 只跑 `review-script`。
 
 在 `etf-68-app` 仓库：
+
+```bash
+cd engine
+# 一键日更：ETF 代表池 + 实质消息 soft-refresh + 30 公募 + 我的持仓
+python3.12 cli_app.py generate
+```
+
+验收（不通过则不得成片）：
+
+- `data/out/latest.json` 的 `dataDate` = 当日或最新交易日
+- `data/out/funds-top30.json`、`data/out/my-holdings.json` 的 `asOf`/`refreshedAt` 为本次刷新时间（与 generate 同时段）
+- 若 `generate` 中 `funds_top30` / `my_holdings` soft-fail，须单独重跑并确认成功：
+
+```bash
+python3.12 cli_app.py funds-top30
+python3.12 cli_app.py my-holdings
+```
+
+Agent 检查清单：
+
+- [ ] 已跑 `generate`（或等价三步刷新）
+- [ ] 已核对 `latest` / `funds-top30` / `my-holdings` 时间戳为最新
+- [ ] 再跑 `review-script` → 合成 → **仅 2K 竖版**成片
+
+### 1. 生成脚本 JSON
 
 ```bash
 cd engine
@@ -29,6 +56,7 @@ python3.12 cli_app.py review-script \
 # 或指定日期：--date YYYY-MM-DD
 ```
 
+`review-script` 会 soft-refresh 实质消息与行情看板，但**不会**刷新 30 公募 / 我的持仓；故第 0 步不可省。
 ### 2. 构建合成 + TTS
 
 ```bash
@@ -106,9 +134,11 @@ python3.12 export_opencut_package.py
 | 技术候选列 | 当日涨跌 / 5日涨跌 / 当日资金 / 5日资金 |
 | 颜色 | 涨/流入红；跌/流出绿 |
 | 上涨占比 | 原「市场宽度」；开场可附简短解释 |
+| 板块均涨跌 | 东财行业板块涨跌幅前三/后三（`industry_boards.py`）；**禁止**代表池 ETF 标签均值 |
 | 开场看板 | 视觉-only：当日 A 股成交额 + 近五日均成交额；上证/深证/创业板/科创50 点位与涨跌（涨红跌绿）；**不入口播** |
 
 章节 id：`open` / `sectors` / `citic` / `news` / `candidates` / `close`（已去掉波动领先）。
+**持仓量变动 / 实质消息**：仅当事件/持仓行的 `date` **精确等于** `dataDate` 才入 `chapters`；禁止日前回退与 lookback 充数；缺数据则整章省略（不说「暂无」）。消息侧有一侧无当日条目时只播另一侧。
 中信章总标题为「持仓量变动」，子项：中信多空、其它机构、总体、本月总体。当日三项口播互斥「净加空xx手 / 净加多xx手 / 持平」；本月用 `monthNet` 念「本月总体净空/净多」。实质消息口播完整标题；板块行动效在对应口播前约 0.5s 出现。TTS 语速约 atempo 1.2×。
 
 改布局：`render_chapter_body` + `chapter_motion_and_sfx` + `render_html`（均在 `build_composition.py`）。
@@ -125,6 +155,10 @@ python3.12 export_opencut_package.py
 
 不要混改两套文案逻辑，除非用户明确要求同步。
 
+## 宏观快评（另线）
+
+PMI 等单点宏观口播竖版见 [macro-flash-video.md](macro-flash-video.md) 与仓外 `etf68-macro-flash/`，**不要**并入本章日更六段。
+
 ## 故障排查
 
 | 现象 | 处理 |
@@ -132,8 +166,10 @@ python3.12 export_opencut_package.py
 | TTS / curl 连不上 | unset `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`，`NO_PROXY=*` |
 | 英文字幕仍是中文 | 查 `build_en_lines` / `pair_sub_lines`，保证每条 cue 成对且 EN 为英文 |
 | 板块口播被掐断 | 禁止按 budget 硬裁；必要时提高软上限或接受略超长 |
+| 持仓/30公募时间戳旧 | 只跑了 `review-script`；须先 `generate`（或单独 `my-holdings` / `funds-top30`） |
+| 视频缺持仓/消息章 | 复盘日无精确日数据属预期；勿用前日/次日头条或持仓回退凑数 |
 | OpenCut 无草稿 | 确认持久 Profile；勿用一次性 Playwright user-data |
-| 桌面找不到成片 | 查 `out/` 与 `~/Desktop/ETF68-市场复盘-*.mp4` |
+| 桌面找不到成片 | 查 `out/` 与 `~/Desktop/ETF68-市场复盘-*-竖版.mp4` |
 
 ## HyperFrames 版本
 
