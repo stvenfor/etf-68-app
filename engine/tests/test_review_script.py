@@ -84,6 +84,7 @@ class ReviewScriptTests(unittest.TestCase):
             industry_sectors=industry_sectors,
         )
         self.assertTrue(script["ok"])
+        self.assertTrue(script.get("oralPolish"))
         chapter_ids = [c["id"] for c in script["chapters"]]
         self.assertEqual(
             ["open", "sectors", "citic", "news", "candidates", "close"],
@@ -91,6 +92,9 @@ class ReviewScriptTests(unittest.TestCase):
         )
         self.assertIn("传媒+6.50%", script["fullNarration"])
         self.assertIn("煤炭行业-2.10%", script["fullNarration"])
+        self.assertIn("来看ETF六十八", script["fullNarration"])
+        self.assertIn("先看板块均涨跌", script["fullNarration"])
+        self.assertIn("涨得最多的三个是", script["fullNarration"])
         self.assertEqual("eastmoney_industry", script["sectors"].get("source"))
         self.assertEqual(-60, script["citic"]["delta"])
         self.assertNotIn("波动领先", script["fullNarration"])
@@ -122,6 +126,18 @@ class ReviewScriptTests(unittest.TestCase):
         self.assertEqual("01 · 日期", script["chapters"][0]["kicker"])
         self.assertEqual("03 · 持仓", script["chapters"][2]["kicker"])
         self.assertEqual("06 · 结束", script["chapters"][-1]["kicker"])
+
+        raw = build_review_script(
+            bundle,
+            fetch_market=False,
+            industry_sectors=industry_sectors,
+            polish=False,
+        )
+        self.assertFalse(raw.get("oralPolish"))
+        self.assertIn("ETF六十八市场复盘。数据日期", raw["fullNarration"])
+        self.assertNotIn("来看ETF六十八", raw["fullNarration"])
+        self.assertIn("板块均涨跌。", raw["fullNarration"])
+        self.assertNotIn("先看板块均涨跌", raw["fullNarration"])
 
     def test_citic_omitted_without_exact_day(self) -> None:
         bundle = {
@@ -206,7 +222,7 @@ class ReviewScriptTests(unittest.TestCase):
             fetch_market=False,
         )
         self.assertIn("news", [c["id"] for c in script["chapters"]])
-        self.assertIn("利好：当日利好", script["fullNarration"])
+        self.assertIn("利好这边：当日利好", script["fullNarration"])
         self.assertNotIn("利空", script["fullNarration"])
         self.assertNotIn("利好暂无", script["fullNarration"])
         self.assertNotIn("利空暂无", script["fullNarration"])

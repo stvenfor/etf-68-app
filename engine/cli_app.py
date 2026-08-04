@@ -683,7 +683,7 @@ def cmd_macro_flash_script(args: argparse.Namespace) -> int:
                 json.dumps(snap, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
             )
 
-    result = build_macro_flash_script(snap, tone=args.tone)
+    result = build_macro_flash_script(snap, tone=args.tone, polish=bool(args.polish))
     if args.output:
         out = Path(args.output)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -724,7 +724,7 @@ def cmd_review_script(args: argparse.Namespace) -> int:
                 except OSError:
                     pass
 
-    result = build_review_script(bundle)
+    result = build_review_script(bundle, polish=bool(args.polish))
     if args.output:
         out = Path(args.output)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -989,6 +989,19 @@ def main() -> int:
         default=None,
         help="Optional path to write the review-script JSON",
     )
+    p_rev.add_argument(
+        "--polish",
+        dest="polish",
+        action="store_true",
+        default=True,
+        help="Oral-polish narration (default on)",
+    )
+    p_rev.add_argument(
+        "--no-polish",
+        dest="polish",
+        action="store_false",
+        help="Keep raw template narration",
+    )
     p_rev.set_defaults(func=cmd_review_script)
 
     p_pmi = sub.add_parser("macro-pmi", help="Fetch China PMI snapshot (Eastmoney + overlay)")
@@ -1017,6 +1030,19 @@ def main() -> int:
         "--output",
         default=None,
         help="Optional path to write macro_flash_script.json",
+    )
+    p_flash.add_argument(
+        "--polish",
+        dest="polish",
+        action="store_true",
+        default=True,
+        help="Oral-polish narration (default on)",
+    )
+    p_flash.add_argument(
+        "--no-polish",
+        dest="polish",
+        action="store_false",
+        help="Keep raw template narration",
     )
     p_flash.set_defaults(func=cmd_macro_flash_script)
 

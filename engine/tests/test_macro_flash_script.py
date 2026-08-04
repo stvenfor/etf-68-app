@@ -48,15 +48,23 @@ class MacroFlashScriptTests(unittest.TestCase):
     def test_chapter_order_and_facts(self) -> None:
         script = build_macro_flash_script(_july_snap(), tone="neutral")
         self.assertTrue(script["ok"])
+        self.assertTrue(script.get("oralPolish"))
         ids = [c["id"] for c in script["chapters"]]
         self.assertEqual(list(CHAPTER_IDS), ids)
         hook = script["chapters"][0]["narration"]
         self.assertIn("49.2", hook)
         self.assertIn("荣枯线", hook)
+        self.assertIn("刚公布", hook)
         self.assertNotIn("黄灯", hook)  # neutral tone avoids copying source metaphor
         facts = script["chapters"][1]
         self.assertTrue(any(m.get("label") == "制造业PMI" for m in facts["body"]["metrics"]))
         self.assertIn("不构成投资建议", script["chapters"][-1]["narration"])
+        self.assertIn("好，本期到这里", script["chapters"][-1]["narration"])
+
+        raw = build_macro_flash_script(_july_snap(), tone="neutral", polish=False)
+        self.assertFalse(raw.get("oralPolish"))
+        self.assertIn("国家统计局公布采购经理指数", raw["chapters"][0]["narration"])
+        self.assertNotIn("刚公布", raw["chapters"][0]["narration"])
 
     def test_caution_tone(self) -> None:
         script = build_macro_flash_script(_july_snap(), tone="caution")

@@ -101,7 +101,7 @@ python3.12 cli_app.py assemble --date 2026-07-24
 # Edge TTS
 python3.12 cli_app.py tts --text "测试旁白" --output /tmp/t.mp3
 
-# 复盘口播 JSON
+# 复盘口播 JSON（默认口语化；可用 --no-polish 保留模板腔）
 python3.12 cli_app.py review-script --output ../data/out/review_script.json
 
 # PMI 宏观快评（独立竖版产品线）
@@ -126,7 +126,7 @@ python3.12 cli_app.py my-holdings
 
 ## Agent 工作方式
 
-1. 改数据/口播逻辑 → 优先 `engine/src/review_script.py` + 单测 `engine/tests/test_review_script.py`。
+1. 改数据/口播逻辑 → 优先 `engine/src/review_script.py` + 单测 `engine/tests/test_review_script.py`；口语化规则在 `engine/src/oral_polish.py`。
 2. 改视频画面/字幕/动效 → 改仓库外 `build_composition.py`，再 rebuild + render（见 daily-review-video）。
 3. 改应用内播报 → `desktop/src/narration.ts` + Electron IPC，勿与视频章节混用一套文案。
 4. 代理环境：引擎子进程会清 `HTTP(S)_PROXY` 并设 `NO_PROXY=*`；外网失败时先 unset 代理再试。

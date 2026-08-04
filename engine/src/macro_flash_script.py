@@ -114,6 +114,7 @@ def build_macro_flash_script(
     *,
     tone: Tone = "neutral",
     brand: str = "ETF-68 宏观快评",
+    polish: bool = True,
 ) -> dict[str, Any]:
     if not snap.get("ok"):
         return {"ok": False, "error": snap.get("error") or "bad_snapshot", "chapters": []}
@@ -266,7 +267,7 @@ def build_macro_flash_script(
         )
 
     title = f"{month_cn}PMI快评：{metaphor}"
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "kind": "macro-flash",
         "month": month,
@@ -283,4 +284,10 @@ def build_macro_flash_script(
             "source": snap.get("source"),
             "sourceUrl": snap.get("sourceUrl"),
         },
+        "fullNarration": "".join(str(c.get("narration") or "") for c in chapters),
     }
+    if polish:
+        from src.oral_polish import polish_script
+
+        result = polish_script(result, kind="macro")
+    return result

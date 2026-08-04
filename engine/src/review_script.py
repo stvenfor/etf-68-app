@@ -388,6 +388,7 @@ def build_chapters(
     market_board: dict[str, Any] | None = None,
     industry_sectors: dict[str, Any] | None = None,
     fetch_market: bool = True,
+    polish: bool = True,
 ) -> dict[str, Any]:
     day = str(bundle.get("dataDate") or "")
     rows = list(bundle.get("rows") or [])
@@ -573,8 +574,7 @@ def build_chapters(
     for i, ch in enumerate(chapters, start=1):
         ch["kicker"] = f"{i:02d} · {ch['kicker']}"
 
-    full_narration = "".join(ch["narration"] for ch in chapters)
-    return {
+    result: dict[str, Any] = {
         "ok": True,
         "dataDate": day,
         "targetDurationS": TARGET_DURATION_S,
@@ -585,8 +585,13 @@ def build_chapters(
         "news": news,
         "candidates": cands,
         "chapters": chapters,
-        "fullNarration": full_narration,
+        "fullNarration": "".join(ch["narration"] for ch in chapters),
     }
+    if polish:
+        from src.oral_polish import polish_script
+
+        result = polish_script(result, kind="review")
+    return result
 
 
 def build_review_script(
@@ -595,6 +600,7 @@ def build_review_script(
     market_board: dict[str, Any] | None = None,
     industry_sectors: dict[str, Any] | None = None,
     fetch_market: bool = True,
+    polish: bool = True,
 ) -> dict[str, Any]:
     if not bundle or not bundle.get("dataDate"):
         return {"ok": False, "error": "missing_bundle"}
@@ -603,4 +609,5 @@ def build_review_script(
         market_board=market_board,
         industry_sectors=industry_sectors,
         fetch_market=fetch_market,
+        polish=polish,
     )
