@@ -33,12 +33,23 @@ python3 scripts/generate_demo_flow.py \
 npm install
 npm run render
 npm run validate
+npm run cover   # → out/cover.jpg + 竖3x4/横4x3 JPG
 ```
 
 输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，公共 BGM + faststart）。
+封面固定 **JPG**：`out/cover.jpg`，以及抖音双封面 `out/cover-竖3x4.jpg`、`out/cover-横4x3.jpg`。
 
 渲染链路：Remotion `--muted` → `remux_previewable.sh` → `mix_bgm.sh`（`assets/bgm.wav`）。
 音乐短于视频则循环，长于视频则裁到成片时长；默认 `loudnorm` 对齐响度。
+
+## 抖音发布
+
+日更标准流程与封面硬规则（禁止 AI 封面、只用已生成 JPG）见仓库 skill：
+
+`.cursor/skills/etf-68-app/sector-fund-flow-video.md`
+
+发布脚本：`~/.cursor/skills/douyin-image-publish/scripts/publish-video.mjs`  
+（必须同时传 `coverPortraitPath` 竖 3:4 + `coverPath` 横 4:3。）
 
 ## 说明
 

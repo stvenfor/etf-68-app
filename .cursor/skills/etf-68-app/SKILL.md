@@ -2,10 +2,11 @@
 name: etf-68-app
 description: >-
   ETF-68 Mac 桌面版与当日市场复盘视频流水线：日更生成、UiBundle 组装、Edge TTS、
-  review-script、HyperFrames 成片、OpenCut 终剪、30 公募代表池净值、我的持仓。
+  review-script、HyperFrames 成片、OpenCut 终剪、30 公募代表池净值、我的持仓、
+  板块资金流向竖屏视频与抖音发布。
   Use when working on etf-68-app, 市场复盘 MP4, Edge TTS 晓晓, OpenCut 草稿,
   review_script, build_composition, 日更播报, funds-top30, 30 公募, my-holdings,
-  我的持仓, or desktop Electron IPC speakText.
+  我的持仓, 资金流向, sector-fund-flow, or desktop Electron IPC speakText.
 ---
 
 # ETF-68 App
@@ -19,6 +20,7 @@ description: >-
 | 目录 / CLI / 环境变量 / 数据产物 | [reference.md](reference.md) |
 | 复盘 MP4（HyperFrames → OpenCut） | [daily-review-video.md](daily-review-video.md) |
 | PMI 宏观快评（独立竖版，非日更六章） | [macro-flash-video.md](macro-flash-video.md) |
+| 板块资金流向竖屏 + 抖音封面/私密发布 | [sector-fund-flow-video.md](sector-fund-flow-video.md) |
 
 ## 快速启动
 
