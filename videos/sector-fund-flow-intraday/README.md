@@ -35,9 +35,10 @@ npm run render
 npm run validate
 ```
 
-输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，静音 AAC 轨 + faststart）。
+输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，公共 BGM + faststart）。
 
-> Cursor / QuickTime 对无音轨 MP4 常会播约 2 秒就停；渲染后须经 `scripts/remux_previewable.sh` 补静音轨。
+渲染链路：Remotion `--muted` → `remux_previewable.sh` → `mix_bgm.sh`（`assets/bgm.wav`）。
+音乐短于视频则循环，长于视频则裁到成片时长；默认 `loudnorm` 对齐响度。
 
 ## 说明
 

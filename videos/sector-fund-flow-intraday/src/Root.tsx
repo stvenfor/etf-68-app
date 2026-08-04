@@ -3,7 +3,7 @@ import {Composition, Still} from 'remotion';
 import {Cover} from './Cover';
 import {SectorFundFlowIntraday} from './SectorFundFlowIntraday';
 import {CompositionPropsSchema, type CompositionProps} from './data/schema';
-import raw from './data/sector-fund-flow-2026-07-31.json';
+import raw from './data/sector-fund-flow-2026-08-03.json';
 
 const defaultProps: CompositionProps = {
   data: CompositionPropsSchema.shape.data.parse(raw),
