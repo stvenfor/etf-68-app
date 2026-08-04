@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
 
 from src.funds_top30 import (
     FORCE_EXCLUDE,
@@ -293,6 +295,111 @@ class FundsTop30BuildTest(unittest.TestCase):
         # time-only uses today + capped clock
         out = format_estimate_time_only("16:04:00")
         self.assertTrue(out.endswith("14:50:00"), out)
+
+    def test_nav_vs_estimate_error_always_when_both_present(self) -> None:
+        from src.funds_top30 import compute_estimate_vs_nav_error, compute_nav_vs_1450_error
+
+        # Cross-day still computes: 估值误差 = 估值相对净值
+        cross = compute_nav_vs_1450_error(
+            nav=1.10,
+            nav_date="2026-07-31",
+            estimate_1450_nav=1.105,
+            estimate_1450_date="2026-08-03",
+        )
+        self.assertEqual(cross["estimateErrorStatus"], "ready")
+        self.assertAlmostEqual(cross["estimateErrorAbs"] or 0, 0.005)
+
+        ready = compute_estimate_vs_nav_error(nav=1.10, estimate_nav=1.105)
+        self.assertEqual(ready["estimateErrorStatus"], "ready")
+        self.assertAlmostEqual(ready["estimateErrorPct"] or 0, 0.4545, places=3)
+
+        pending = compute_estimate_vs_nav_error(nav=None, estimate_nav=1.1)
+        self.assertEqual(pending["estimateErrorStatus"], "pending")
+
+    def test_morning_uses_prev_session_1450(self) -> None:
+        from src.funds_top30 import enrich_nav
+        from zoneinfo import ZoneInfo
+
+        sh = ZoneInfo("Asia/Shanghai")
+        morning = datetime(2026, 8, 4, 9, 30, tzinfo=sh)
+
+        def fake_fetch(url: str) -> str:
+            if "pingzhongdata" in url:
+                # Latest NAV is previous trading day 08-03
+                return (
+                    'var fS_name = "测试";'
+                    "Data_netWorthTrend=["
+                    '{"x":1784937600000,"y":1.00,"equityReturn":0.1},'
+                    '{"x":1785024000000,"y":1.10,"equityReturn":1.0}'
+                    "];"
+                )
+            if "sinajs.cn" in url:
+                # Today's early quote must NOT be used before noon
+                return 'var hq_str_fu_011154="测试,09:30:00,1.20,1.10,1.10,0,9.09,2026-08-04,1.2,1";'
+            return ""
+
+        prev = {
+            "011154": {
+                "estimate1450Date": "2026-08-03",
+                "estimate1450Nav": 1.105,
+                "estimate1450Frozen": True,
+                "estimateChangePct": 0.45,
+                "estimateNav": 1.105,
+                "estimateTime": "2026-08-03 14:50:00",
+            }
+        }
+        rows = enrich_nav(
+            [{"code": "011154", "name": "测试"}],
+            fetch=fake_fetch,
+            previous_by_code=prev,
+            now=morning,
+        )
+        row = rows[0]
+        self.assertAlmostEqual(row["estimateNav"], 1.105)
+        self.assertEqual(row["estimateTime"], "2026-08-03 14:50:00")
+        self.assertAlmostEqual(row["nav"], 1.10)
+        self.assertEqual(row["estimateErrorStatus"], "ready")
+        self.assertAlmostEqual(row["estimateErrorAbs"] or 0, 0.005)
+
+    def test_morning_rolls_back_same_day_nav(self) -> None:
+        from src.funds_top30 import enrich_nav
+        from zoneinfo import ZoneInfo
+
+        sh = ZoneInfo("Asia/Shanghai")
+        morning = datetime(2026, 8, 4, 10, 0, tzinfo=sh)
+        # 2026-08-04 and 2026-08-03 midnight Shanghai as ms
+        t_today = int(datetime(2026, 8, 4, tzinfo=sh).timestamp() * 1000)
+        t_prev = int(datetime(2026, 8, 3, tzinfo=sh).timestamp() * 1000)
+
+        def fake_fetch(url: str) -> str:
+            if "pingzhongdata" in url:
+                return (
+                    'var fS_name = "测试";'
+                    "Data_netWorthTrend=["
+                    f'{{"x":{t_prev},"y":1.10,"equityReturn":1.0}},'
+                    f'{{"x":{t_today},"y":1.12,"equityReturn":1.8}}'
+                    "];"
+                )
+            if "sinajs.cn" in url:
+                return ""
+            return ""
+
+        prev = {
+            "011154": {
+                "estimate1450Date": "2026-08-03",
+                "estimate1450Nav": 1.105,
+                "estimateTime": "2026-08-03 14:50:00",
+                "estimateNav": 1.105,
+            }
+        }
+        rows = enrich_nav(
+            [{"code": "011154"}],
+            fetch=fake_fetch,
+            previous_by_code=prev,
+            now=morning,
+        )
+        self.assertEqual(rows[0]["navDate"], "2026-08-03")
+        self.assertAlmostEqual(rows[0]["nav"], 1.10)
 
 
 if __name__ == "__main__":

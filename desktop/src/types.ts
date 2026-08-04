@@ -353,6 +353,19 @@ export type FundsTop30Bundle = {
   source?: Record<string, string>;
 };
 
+export type HoldingAssetMix = {
+  stockPct?: number | null;
+  bondPct?: number | null;
+  cashPct?: number | null;
+  otherPct?: number | null;
+  asOf?: string | null;
+};
+
+export type HoldingIndustry = {
+  name: string;
+  weightPct: number;
+};
+
 export type MyHoldingRow = {
   code: string;
   name: string;
@@ -368,11 +381,26 @@ export type MyHoldingRow = {
   estimateChangePct?: number | null;
   estimateTime?: string | null;
   estimatePremiumPct?: number | null;
+  /** 会话 14:50 估值快照（上午展示上一日；收盘后冻结当日） */
+  estimate1450Nav?: number | null;
+  estimate1450Date?: string | null;
+  /** (展示估值 − 公布净值) / 公布净值 × 100；始终按当前展示值计算 */
+  estimateErrorPct?: number | null;
+  estimateErrorAbs?: number | null;
+  estimateErrorStatus?: "ready" | "pending" | string | null;
   rankInCategory?: number | null;
   /** 持仓侧：继续持有 / 可加仓 / 减仓观察 / 考虑赎回 / 暂缓 */
   advice?: string;
   adviceDetail?: string;
   adviceRisk?: string;
+  /** 基金风险等级 R1–R5 */
+  riskLevel?: string;
+  riskLabel?: string;
+  riskNote?: string;
+  assetMix?: HoldingAssetMix | null;
+  industries?: HoldingIndustry[];
+  industryAsOf?: string | null;
+  profileError?: string;
   error?: string;
 };
 

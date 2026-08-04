@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+from .fund_portfolio_profile import enrich_portfolio_profile
 from .funds_top30 import CATEGORY_LABELS, FetchFn, _default_fetch, enrich_nav
 from .position_advice import FRAMEWORK as ADVICE_FRAMEWORK
 from .position_advice import apply_position_advice
@@ -358,7 +359,9 @@ def build_my_holdings(
         for r in previous["rows"]:
             if isinstance(r, dict) and r.get("code"):
                 prev_by[str(r["code"]).zfill(6)] = r
-    valued = apply_position_advice(enrich_nav(universe, fetch=fetch, previous_by_code=prev_by))
+    valued = enrich_nav(universe, fetch=fetch, previous_by_code=prev_by)
+    valued = enrich_portfolio_profile(valued, fetch=fetch, previous_by_code=prev_by, workers=5)
+    valued = apply_position_advice(valued)
     counts = {k: 0 for k in CATEGORY_ORDER}
     advice_counts: dict[str, int] = {}
     for row in valued:
@@ -378,8 +381,13 @@ def build_my_holdings(
             "universe": "personal_holdings_seed",
             "nav": "eastmoney_pingzhong",
             "estimate": "sina_hq_fu",
+            "portfolio": "eastmoney_f10_hypz_asset",
+            "risk": "eastmoney_fund_mn_basic",
         },
-        "excludedNote": "已排除货币基金、同业存单现金类与ETF联接；不存储持仓金额与盈亏",
+        "excludedNote": (
+            "已排除货币基金、同业存单现金类与ETF联接；不存储持仓金额与盈亏。"
+            "行业占比与股债仓位取最新公开报告，可能滞后于净值日。"
+        ),
         "rows": valued,
     }
 

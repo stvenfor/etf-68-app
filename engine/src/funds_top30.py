@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
@@ -279,21 +279,11 @@ def select_category_top(
     return out
 
 
-def parse_pingzhong_nav(body: str) -> dict[str, Any]:
-    """Latest published unit NAV + day change from Eastmoney pingzhong JS."""
-    m = re.search(r"Data_netWorthTrend\s*=\s*(\[.*?\]);", body, re.S)
-    if not m:
-        raise ValueError("missing_netWorthTrend")
-    series = json.loads(m.group(1))
-    if not series:
-        raise ValueError("empty_netWorthTrend")
-    last = series[-1]
-    nav = _num(last.get("y"))
-    if nav is None:
-        raise ValueError("missing_nav")
-    day_chg = _num(last.get("equityReturn"))
+def _nav_point(row: Mapping[str, Any] | dict[str, Any]) -> tuple[Optional[float], Optional[float], Optional[str]]:
+    nav = _num(row.get("y"))
+    day_chg = _num(row.get("equityReturn"))
     nav_date = None
-    ts = last.get("x")
+    ts = row.get("x")
     if ts is not None:
         try:
             nav_date = (
@@ -301,11 +291,45 @@ def parse_pingzhong_nav(body: str) -> dict[str, Any]:
             )
         except (TypeError, ValueError, OSError, OverflowError):
             nav_date = None
+    return nav, day_chg, nav_date
+
+
+def parse_pingzhong_nav(body: str) -> dict[str, Any]:
+    """Latest published unit NAV + day change from Eastmoney pingzhong JS.
+
+    Also exposes the previous series point so callers can roll back when the
+    latest NAV date is still the unfinished trading day.
+    """
+    m = re.search(r"Data_netWorthTrend\s*=\s*(\[.*?\]);", body, re.S)
+    if not m:
+        raise ValueError("missing_netWorthTrend")
+    series = json.loads(m.group(1))
+    if not series:
+        raise ValueError("empty_netWorthTrend")
+    nav, day_chg, nav_date = _nav_point(series[-1])
+    if nav is None:
+        raise ValueError("missing_nav")
     name = None
     nm = re.search(r'var\s+fS_name\s*=\s*"([^"]*)"', body)
     if nm:
         name = nm.group(1)
-    return {"nav": nav, "dayChangePct": day_chg, "navDate": nav_date, "name": name}
+    out: dict[str, Any] = {"nav": nav, "dayChangePct": day_chg, "navDate": nav_date, "name": name}
+    if len(series) >= 2:
+        p_nav, p_chg, p_date = _nav_point(series[-2])
+        if p_nav is not None:
+            out["prevNav"] = p_nav
+            out["prevDayChangePct"] = p_chg
+            out["prevNavDate"] = p_date
+    # Optional: latest report-period asset mix (股票/债券/现金占净比)
+    try:
+        from .fund_portfolio_profile import parse_pingzhong_asset_mix
+
+        mix = parse_pingzhong_asset_mix(body)
+        if mix:
+            out["assetMix"] = mix
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def parse_sina_fund_quote(body: str, code: str) -> dict[str, Any]:
@@ -355,7 +379,9 @@ def parse_sina_fund_quote(body: str, code: str) -> dict[str, Any]:
 # Sina fu_ clock often freezes after close (15:00–16:04). Product rule:
 # show valuation at most as of 14:50:00, and freeze estimate *values* the same way
 # when the quote/local clock is past 14:50 (prefer prior same-day ≤14:50 snapshot).
+# Before 12:00: show previous session 14:50 (not today's early/open quote).
 ESTIMATE_DISPLAY_CUTOFF_HM = (14, 50)
+ESTIMATE_MORNING_CUTOFF_HM = (12, 0)
 
 
 def _parse_estimate_dt(raw: str | None) -> datetime | None:
@@ -433,6 +459,123 @@ def _prev_usable_1450_snapshot(prev: dict[str, Any] | None, *, day: str) -> dict
     return prev
 
 
+def _date_key(raw: Any) -> str | None:
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return text[:10]
+    return None
+
+
+def _before_morning_cutoff(now: datetime) -> bool:
+    """True before 12:00 — show previous session 14:50 valuation."""
+    return _hm_tuple(now) < ESTIMATE_MORNING_CUTOFF_HM
+
+
+def compute_estimate_vs_nav_error(
+    *,
+    nav: Any,
+    estimate_nav: Any,
+) -> dict[str, Any]:
+    """估值误差 = 估值相对实际公布净值的差距（始终按当前展示的估值与净值计算）。"""
+    est = _num(estimate_nav)
+    px = _num(nav)
+    if est is None or px is None or px == 0:
+        return {
+            "estimateErrorPct": None,
+            "estimateErrorAbs": None,
+            "estimateErrorStatus": "pending",
+        }
+    err_abs = round(est - px, 6)
+    err_pct = round((est - px) / px * 100.0, 4)
+    return {
+        "estimateErrorPct": err_pct,
+        "estimateErrorAbs": err_abs,
+        "estimateErrorStatus": "ready",
+    }
+
+
+def compute_nav_vs_1450_error(
+    *,
+    nav: Any,
+    nav_date: Any = None,
+    estimate_1450_nav: Any = None,
+    estimate_1450_date: Any = None,
+    estimate_nav: Any = None,
+) -> dict[str, Any]:
+    """Backward-compatible wrapper: prefer explicit estimate_nav, else 14:50 snapshot."""
+    est = estimate_nav if estimate_nav is not None else estimate_1450_nav
+    return compute_estimate_vs_nav_error(nav=nav, estimate_nav=est)
+
+
+def _prev_session_1450_snapshot(
+    prev: dict[str, Any] | None,
+    *,
+    today: str,
+) -> dict[str, Any] | None:
+    """Previous trading session's frozen 14:50 estimate (date strictly before today)."""
+    if not prev:
+        return None
+    d1450 = _date_key(prev.get("estimate1450Date"))
+    nav1450 = _num(prev.get("estimate1450Nav"))
+    if d1450 and d1450 < today and nav1450 is not None:
+        return {
+            "estimateNav": nav1450,
+            "estimateChange": prev.get("estimateChange"),
+            "estimateChangePct": prev.get("estimateChangePct"),
+            "estimateTime": f"{d1450} 14:50:00",
+            "estimate1450Date": d1450,
+            "estimate1450Nav": nav1450,
+            "estimate1450Frozen": True,
+        }
+    # Fallback: last displayed estimate from a prior calendar day
+    raw = prev.get("estimateTime") or prev.get("estimateQuoteTime")
+    dt = _parse_estimate_dt(str(raw) if raw else None)
+    est = _num(prev.get("estimateNav"))
+    if dt is None or est is None:
+        return None
+    day = dt.date().isoformat()
+    if day >= today:
+        return None
+    return {
+        "estimateNav": est,
+        "estimateChange": prev.get("estimateChange"),
+        "estimateChangePct": prev.get("estimateChangePct"),
+        "estimateTime": f"{day} 14:50:00",
+        "estimate1450Date": _date_key(prev.get("estimate1450Date")) or day,
+        "estimate1450Nav": nav1450 if nav1450 is not None else est,
+        "estimate1450Frozen": True,
+    }
+
+
+def _carry_or_set_1450(
+    item: dict[str, Any],
+    *,
+    day: str,
+    estimate_nav: Any,
+    prev: dict[str, Any] | None,
+    freeze: bool,
+) -> None:
+    """Persist same-day 14:50 valuation for later comparison with published NAV."""
+    prev_date = _date_key((prev or {}).get("estimate1450Date"))
+    prev_nav = _num((prev or {}).get("estimate1450Nav"))
+    # Prefer an already frozen same-day snapshot from a prior refresh.
+    if prev_date == day and prev_nav is not None:
+        item["estimate1450Date"] = day
+        item["estimate1450Nav"] = prev_nav
+        if (prev or {}).get("estimate1450Frozen") or freeze:
+            item["estimate1450Frozen"] = True
+        return
+    est = _num(estimate_nav)
+    if est is None:
+        return
+    item["estimate1450Date"] = day
+    item["estimate1450Nav"] = est
+    if freeze:
+        item["estimate1450Frozen"] = True
+
+
 def _date_le(a: Optional[str], b: Optional[str]) -> bool:
     """True if a and b look like YYYY-MM-DD and a < b."""
     if not a or not b or len(a) < 10 or len(b) < 10:
@@ -474,18 +617,31 @@ def fetch_sina_estimates(
     return out
 
 
-def _apply_published_as_estimate(item: dict[str, Any]) -> None:
+def _apply_published_as_estimate(
+    item: dict[str, Any],
+    *,
+    now: datetime | None = None,
+    morning: bool = False,
+) -> None:
     """When no usable intraday valuation, mirror published NAV day-change.
 
     「估值时间」只保留完整日期时间（超过 14:50 记为 14:50:00），无刷新后缀。
+    上午无上一日 14:50 缓存时，用净值日 14:50 对齐展示。
     """
     if item.get("nav") is None:
         return
     item["estimateNav"] = item.get("nav")
     item["estimateChangePct"] = item.get("dayChangePct")
     item["estimateChange"] = None
-    now = datetime.now(SHANGHAI)
-    item["estimateTime"] = format_estimate_time_only(None, fallback=now)
+    now = now or datetime.now(SHANGHAI)
+    nav_day = _date_key(item.get("navDate"))
+    if morning and nav_day:
+        item["estimateTime"] = f"{nav_day} 14:50:00"
+        item["estimate1450Date"] = nav_day
+        item["estimate1450Nav"] = item.get("nav")
+        item["estimate1450Frozen"] = True
+    else:
+        item["estimateTime"] = format_estimate_time_only(None, fallback=now)
     item["refreshedAt"] = now.strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -494,15 +650,19 @@ def enrich_nav(
     *,
     fetch: FetchFn = _default_fetch,
     previous_by_code: Optional[dict[str, dict[str, Any]]] = None,
+    now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     codes = [str(r.get("code") or "").zfill(6) for r in rows if r.get("code")]
     estimates = fetch_sina_estimates(codes, fetch=fetch)
     prev_map = previous_by_code or {}
-    now = datetime.now(SHANGHAI)
+    now = now or datetime.now(SHANGHAI)
+    today = now.date().isoformat()
+    morning = _before_morning_cutoff(now)
     out: list[dict[str, Any]] = []
     for row in rows:
         item = dict(row)
         code = str(item.get("code") or "").zfill(6)
+        nav_info: dict[str, Any] = {}
         try:
             nav_info = fetch_eastmoney_nav(code, fetch=fetch)
             item["nav"] = nav_info["nav"]
@@ -511,39 +671,109 @@ def enrich_nav(
                 item["navDate"] = nav_info["navDate"]
             if nav_info.get("name") and not item.get("name"):
                 item["name"] = nav_info["name"]
+            if nav_info.get("assetMix"):
+                item["assetMix"] = nav_info["assetMix"]
             item.pop("error", None)
         except Exception as exc:  # noqa: BLE001 — keep row, mark error
             item["error"] = str(exc)
 
+        # 交易日净值未更新/未落定（最新点仍标今日）→ 展示上一交易日最终净值
+        if (
+            morning
+            and _date_key(item.get("navDate")) == today
+            and nav_info.get("prevNav") is not None
+            and nav_info.get("prevNavDate")
+        ):
+            item["nav"] = nav_info["prevNav"]
+            item["dayChangePct"] = nav_info.get("prevDayChangePct")
+            item["navDate"] = nav_info["prevNavDate"]
+
         est = estimates.get(code)
-        # Stale estimate (common for QDII / missing fu_): fall back to published.
-        stale = bool(est and _date_le(est.get("estimateDate"), item.get("navDate")))
+        prev_row = prev_map.get(code)
         pulled_at = now.strftime("%Y-%m-%d %H:%M:%S")
-        if est and est.get("estimateNav") is not None and not stale:
-            quote_time = est.get("estimateTime") or est.get("estimateDate")
-            item["estimateQuoteTime"] = quote_time
-            freeze = _should_freeze_at_1450(str(quote_time) if quote_time else None, now=now)
-            quote_dt = _parse_estimate_dt(str(quote_time) if quote_time else None) or now
-            day = quote_dt.date().isoformat()
-            snap = _prev_usable_1450_snapshot(prev_map.get(code), day=day) if freeze else None
+        used_morning_prev = False
+
+        # 12:00 前：展示上一交易日 14:50 估值（不用当日早盘报价）
+        if morning:
+            snap = _prev_session_1450_snapshot(prev_row, today=today)
             if snap is not None:
-                item["estimateNav"] = snap.get("estimateNav")
+                item["estimateNav"] = snap["estimateNav"]
                 item["estimateChange"] = snap.get("estimateChange")
                 item["estimateChangePct"] = snap.get("estimateChangePct")
+                item["estimateTime"] = snap["estimateTime"]
+                item["estimateQuoteTime"] = snap["estimateTime"]
+                item["estimate1450Date"] = snap.get("estimate1450Date")
+                item["estimate1450Nav"] = snap.get("estimate1450Nav")
+                item["estimate1450Frozen"] = True
+                item["refreshedAt"] = pulled_at
+                used_morning_prev = True
+            elif est and est.get("estimateNav") is not None:
+                est_day = _date_key(est.get("estimateDate"))
+                # Sina 仍挂着上一交易日估值时可用；当日早盘报价丢弃
+                if est_day and est_day < today:
+                    quote_time = est.get("estimateTime") or est.get("estimateDate")
+                    item["estimateQuoteTime"] = quote_time
+                    item["estimateNav"] = est["estimateNav"]
+                    if est.get("estimateChange") is not None:
+                        item["estimateChange"] = est["estimateChange"]
+                    if est.get("estimateChangePct") is not None:
+                        item["estimateChangePct"] = est["estimateChangePct"]
+                    item["estimateTime"] = f"{est_day} 14:50:00"
+                    item["estimate1450Date"] = est_day
+                    item["estimate1450Nav"] = est["estimateNav"]
+                    item["estimate1450Frozen"] = True
+                    item["refreshedAt"] = pulled_at
+                    used_morning_prev = True
+
+        if not used_morning_prev:
+            # Stale estimate (common for QDII / missing fu_): fall back to published.
+            stale = bool(est and _date_le(est.get("estimateDate"), item.get("navDate")))
+            if est and est.get("estimateNav") is not None and not stale and not (
+                morning and _date_key(est.get("estimateDate")) == today
+            ):
+                quote_time = est.get("estimateTime") or est.get("estimateDate")
+                item["estimateQuoteTime"] = quote_time
+                freeze = _should_freeze_at_1450(str(quote_time) if quote_time else None, now=now)
+                quote_dt = _parse_estimate_dt(str(quote_time) if quote_time else None) or now
+                day = quote_dt.date().isoformat()
+                snap = _prev_usable_1450_snapshot(prev_row, day=day) if freeze else None
+                if snap is not None:
+                    item["estimateNav"] = snap.get("estimateNav")
+                    item["estimateChange"] = snap.get("estimateChange")
+                    item["estimateChangePct"] = snap.get("estimateChangePct")
+                else:
+                    item["estimateNav"] = est["estimateNav"]
+                    if est.get("estimateChange") is not None:
+                        item["estimateChange"] = est["estimateChange"]
+                    if est.get("estimateChangePct") is not None:
+                        item["estimateChangePct"] = est["estimateChangePct"]
+                item["estimateTime"] = format_estimate_time_only(
+                    str(quote_time) if quote_time else None,
+                    fallback=now,
+                )
+                item["refreshedAt"] = pulled_at
+                _carry_or_set_1450(
+                    item,
+                    day=day,
+                    estimate_nav=item.get("estimateNav"),
+                    prev=prev_row,
+                    freeze=freeze,
+                )
             else:
-                item["estimateNav"] = est["estimateNav"]
-                if est.get("estimateChange") is not None:
-                    item["estimateChange"] = est["estimateChange"]
-                if est.get("estimateChangePct") is not None:
-                    item["estimateChangePct"] = est["estimateChangePct"]
-            # Display: date+time only; past cutoff → 14:50:00 (values follow freeze above).
-            item["estimateTime"] = format_estimate_time_only(
-                str(quote_time) if quote_time else None,
-                fallback=now,
+                _apply_published_as_estimate(item, now=now, morning=morning)
+                if prev_row and _num(prev_row.get("estimate1450Nav")) is not None:
+                    item["estimate1450Date"] = prev_row.get("estimate1450Date")
+                    item["estimate1450Nav"] = prev_row.get("estimate1450Nav")
+                    if prev_row.get("estimate1450Frozen"):
+                        item["estimate1450Frozen"] = True
+
+        # 估值误差始终 = 当前展示估值 vs 当前展示公布净值
+        item.update(
+            compute_estimate_vs_nav_error(
+                nav=item.get("nav"),
+                estimate_nav=item.get("estimateNav"),
             )
-            item["refreshedAt"] = pulled_at
-        else:
-            _apply_published_as_estimate(item)
+        )
         out.append(item)
     return out
 
