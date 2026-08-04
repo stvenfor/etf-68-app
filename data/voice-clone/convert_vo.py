@@ -49,7 +49,8 @@ def main() -> int:
     converter.load_ckpt(str(ckpt))
 
     print(f"extract target SE from {ref}")
-    tgt_se = converter.extract_se([str(ref)], se_save_path=str(ROOT / "target_se.pth"))
+    se_path = Path(os.environ.get("ETF68_VO_SE", str(ROOT / "target_se.pth")))
+    tgt_se = converter.extract_se([str(ref)], se_save_path=str(se_path))
 
     chapters_env = os.environ.get("ETF68_VO_CHAPTERS", "").strip()
     if chapters_env:
@@ -70,7 +71,7 @@ def main() -> int:
             src_se=src_se,
             tgt_se=tgt_se,
             output_path=str(dst),
-            tau=0.5,
+            tau=float(os.environ.get("ETF68_VO_TAU", "0.75")),
             message="@etf68",
         )
         print(f"  wrote {dst} ({dst.stat().st_size} bytes)")
