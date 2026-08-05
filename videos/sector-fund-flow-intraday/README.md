@@ -33,11 +33,11 @@ python3 scripts/generate_demo_flow.py \
 npm install
 npm run render
 npm run validate
-npm run cover   # → out/cover.jpg + 竖3x4/横4x3 JPG
+npm run cover   # SectorFundFlowCover 海报构图 → out/cover.jpg + 竖3x4/横4x3 JPG
 ```
 
 输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，公共 BGM + faststart）。
-封面固定 **JPG**：`out/cover.jpg`，以及抖音双封面 `out/cover-竖3x4.jpg`、`out/cover-横4x3.jpg`。
+封面固定 **JPG**：用独立 `SectorFundFlowCover` 海报（**不是**成片冻帧），以及抖音双封面 `out/cover-竖3x4.jpg`、`out/cover-横4x3.jpg`。
 
 渲染链路：Remotion `--muted` → `remux_previewable.sh` → `mix_bgm.sh`（`assets/bgm.wav`）。
 音乐短于视频则循环，长于视频则裁到成片时长；默认 `loudnorm` 对齐响度。
