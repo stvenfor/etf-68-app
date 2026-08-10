@@ -35,9 +35,29 @@ export type EtfRow = {
   flow1: number | null;
   flow5: number | null;
   flow10: number | null;
+  panoramaSeries?: EtfPanoramaPoint[];
+  panoramaSummary?: EtfPanoramaSummary | null;
   sector: string;
   reportIndex: number;
   kdjMacdRef: string;
+};
+
+export type EtfPanoramaPoint = {
+  date: string;
+  netFlowYi: number | null;
+  amountYi: number | null;
+  sharesYi: number | null;
+  close: number | null;
+};
+
+export type EtfPanoramaSummary = {
+  avgNetFlowYi: number | null;
+  avgAmountYi: number | null;
+  sumNetFlowYi: number | null;
+  /** 近 3/5/10 个有净申赎样本的交易日合计（亿元） */
+  flow3Yi: number | null;
+  flow5Yi: number | null;
+  flow10Yi: number | null;
 };
 
 export type TrendScoreDimension = {
@@ -485,6 +505,159 @@ declare global {
         fetchedAt?: string | null;
         error?: string;
       }>;
+      loadFinanceUserData: () => Promise<{
+        ok: boolean;
+        data?: {
+          assetList?: Array<Record<string, unknown>>;
+          rebalanceList?: Array<Record<string, unknown>>;
+          updatedAt?: string | null;
+        };
+        error?: string;
+      }>;
+      saveFinanceUserData: (payload: {
+        assetList?: Array<Record<string, unknown>>;
+        rebalanceList?: Array<Record<string, unknown>>;
+      }) => Promise<{
+        ok: boolean;
+        data?: Record<string, unknown>;
+        error?: string;
+      }>;
+      loadFinanceData: () => Promise<{
+        ok: boolean;
+        data?: {
+          financeNews?: Array<Record<string, unknown>>;
+          indexTrack?: Array<Record<string, unknown>>;
+          fundQuotes?: Record<string, Record<string, unknown>>;
+          updatedAt?: string | null;
+        };
+        error?: string;
+      }>;
+      refreshFinanceNews: () => Promise<{
+        ok: boolean;
+        count?: number;
+        financeNews?: Array<Record<string, unknown>>;
+        updatedAt?: string | null;
+        data?: {
+          financeNews?: Array<Record<string, unknown>>;
+          updatedAt?: string | null;
+        };
+        error?: string;
+      }>;
+      refreshIndexTrack: () => Promise<{
+        ok: boolean;
+        count?: number;
+        indexTrack?: Array<Record<string, unknown>>;
+        updatedAt?: string | null;
+        data?: {
+          indexTrack?: Array<Record<string, unknown>>;
+          updatedAt?: string | null;
+        };
+        error?: string;
+      }>;
+      refreshFinanceQuotes: () => Promise<{
+        ok: boolean;
+        updated?: number;
+        data?: {
+          fundQuotes?: Record<string, Record<string, unknown>>;
+        };
+        userData?: {
+          assetList?: Array<Record<string, unknown>>;
+        };
+        holdings?: MyHoldingsBundle;
+        error?: string;
+      }>;
+      financeOcr: (payload: { imagePath: string }) => Promise<{
+        ok: boolean;
+        candidates?: Array<{
+          code: string;
+          name?: string;
+          amount?: number;
+          cost?: number;
+        }>;
+        count?: number;
+        hint?: string;
+        error?: string;
+      }>;
+      financePickImage: () => Promise<{
+        ok: boolean;
+        imagePath?: string;
+        cancelled?: boolean;
+        error?: string;
+      }>;
+      getFinanceSyncConfig: () => Promise<{
+        ok: boolean;
+        hasToken?: boolean;
+        proxy?: string;
+        target?: {
+          owner: string;
+          repo: string;
+          branch: string;
+          userDataPath: string;
+          dataPath: string;
+        };
+        error?: string;
+      }>;
+      saveFinanceSyncConfig: (payload: {
+        token?: string;
+        proxy?: string;
+      }) => Promise<{ ok: boolean; hasToken?: boolean; proxy?: string; error?: string }>;
+      financeCloudPull: () => Promise<{
+        ok: boolean;
+        userData?: Record<string, unknown>;
+        data?: Record<string, unknown>;
+        error?: string;
+      }>;
+      financeCloudPush: (payload?: { which?: string }) => Promise<{
+        ok: boolean;
+        results?: Record<string, unknown>;
+        error?: string;
+      }>;
+      loadRotationStrategies: () => Promise<{
+        ok: boolean;
+        version?: number;
+        active_id?: string;
+        items?: Array<Record<string, unknown>>;
+        error?: string;
+      }>;
+      saveRotationStrategy: (payload: {
+        id?: string | null;
+        name?: string;
+        config?: Record<string, unknown>;
+        noActivate?: boolean;
+      }) => Promise<{
+        ok: boolean;
+        item?: Record<string, unknown>;
+        error?: string;
+      }>;
+      deleteRotationStrategy: (payload: { id: string }) => Promise<{
+        ok: boolean;
+        active_id?: string;
+        items?: Array<Record<string, unknown>>;
+        error?: string;
+      }>;
+      duplicateRotationStrategy: (payload: {
+        id: string;
+        name?: string;
+      }) => Promise<{
+        ok: boolean;
+        item?: Record<string, unknown>;
+        error?: string;
+      }>;
+      activateRotationStrategy: (payload: { id: string }) => Promise<{
+        ok: boolean;
+        active_id?: string;
+        items?: Array<Record<string, unknown>>;
+        error?: string;
+      }>;
+      fetchXiaoxinPublic: () => Promise<Record<string, unknown>>;
+      runRotationBacktest: (payload?: {
+        strategyId?: string;
+        config?: Record<string, unknown>;
+        workers?: number;
+        noPublic?: boolean;
+      }) => Promise<Record<string, unknown>>;
+      loadRotationLast: () => Promise<Record<string, unknown>>;
+      loadRotationAccountRef: () => Promise<Record<string, unknown>>;
       onGenerateLog: (cb: (line: string) => void) => () => void;
     };
   }

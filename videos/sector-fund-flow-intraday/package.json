@@ -7,7 +7,7 @@
     "studio": "remotion studio src/index.ts",
     "compositions": "remotion compositions src/index.ts",
     "still": "remotion still src/index.ts SectorFundFlowIntraday out/still.jpg --frame=300 --image-format=jpeg",
-    "cover": "remotion still src/index.ts SectorFundFlowCover out/cover.jpg --image-format=jpeg && bash scripts/export_cover_variants.sh out/cover.jpg",
+    "cover": "remotion still src/index.ts SectorFundFlowCover out/cover.jpg --image-format=jpeg && remotion still src/index.ts SectorFundFlowCoverPortrait out/cover-竖3x4-render.jpg --image-format=jpeg && bash scripts/export_cover_variants.sh out/cover.jpg",
     "render": "remotion render src/index.ts SectorFundFlowIntraday out/sector-fund-flow.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --color-space=bt709 --muted --image-format=png && bash scripts/remux_previewable.sh out/sector-fund-flow.mp4 && bash scripts/mix_bgm.sh out/sector-fund-flow.mp4 assets/bgm.wav 1.0",
     "validate": "python3 scripts/validate_video.py out/sector-fund-flow.mp4",
     "demo-data": "python3 scripts/generate_demo_flow.py --trade-date 2026-07-28 --output src/data/sector-fund-flow-2026-07-28.json",

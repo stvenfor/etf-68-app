@@ -129,6 +129,23 @@ class ReportSourceTests(unittest.TestCase):
         self.assertEqual("159995", points[1].code)
         self.assertEqual(14_068_360_000, points[1].shares)
 
+    def test_szse_parser_treats_empty_result_stub_as_no_points(self) -> None:
+        payload = _xlsx_bytes(
+            [
+                ["日期", "基金代码", "基金简称", "基金规模(份)"],
+                ["没有找到符合条件的数据！", "", "", ""],
+            ]
+        )
+
+        points = parse_szse_share_xlsx(
+            payload,
+            fetched_at=FETCHED_AT,
+            start_date=date(2026, 2, 3),
+            end_date=date(2026, 8, 4),
+        )
+
+        self.assertEqual([], points)
+
     def test_szse_parser_rejects_missing_required_columns(self) -> None:
         payload = _xlsx_bytes([["日期", "基金代码"], ["2026-07-20", "159915"]])
 
@@ -177,6 +194,47 @@ class ReportSourceTests(unittest.TestCase):
         self.assertIn("STAT_DATE=2026-07-20", seen[0][0].full_url)
         self.assertEqual("https://www.sse.com.cn/", seen[0][0].headers["Referer"])
         self.assertEqual(15, seen[0][1])
+
+    def test_szse_parser_skips_malformed_rows_and_keeps_valid(self) -> None:
+        payload = _xlsx_bytes(
+            [
+                ["日期", "基金代码", "基金简称", "基金规模(份)"],
+                ["2026-07-20", "159915", "创业板ETF", 123],
+                ["bad-date", "159995", "芯片ETF", 456],
+                ["2026-07-20", "159995", "芯片ETF", 789],
+                ["2026-07-21", "xx", "坏代码", 10],
+            ]
+        )
+
+        points = parse_szse_share_xlsx(
+            payload,
+            fetched_at=FETCHED_AT,
+            start_date=date(2026, 7, 20),
+            end_date=date(2026, 7, 21),
+        )
+
+        self.assertEqual(2, len(points))
+        self.assertEqual(["159915", "159995"], [p.code for p in points])
+        self.assertEqual([123, 789], [p.shares for p in points])
+
+    def test_szse_parser_skips_rows_outside_requested_range(self) -> None:
+        payload = _xlsx_bytes(
+            [
+                ["日期", "基金代码", "基金简称", "基金规模(份)"],
+                ["2026-07-19", "159915", "创业板ETF", 111],
+                ["2026-07-20", "159915", "创业板ETF", 222],
+            ]
+        )
+
+        points = parse_szse_share_xlsx(
+            payload,
+            fetched_at=FETCHED_AT,
+            start_date=date(2026, 7, 20),
+            end_date=date(2026, 7, 20),
+        )
+
+        self.assertEqual(1, len(points))
+        self.assertEqual(222, points[0].shares)
 
     def test_szse_provider_uses_official_daily_range_endpoint(self) -> None:
         payload = _xlsx_bytes(

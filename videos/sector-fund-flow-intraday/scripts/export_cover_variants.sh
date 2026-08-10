@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Export Douyin dual covers as JPG from the main 9:16 cover.
+# Export Douyin dual covers as JPG from the main 9:16 poster cover.
+# Poster-safe: letterbox (pad), NEVER hub-crop from video freeze (old y=380 crop).
 # Usage: bash scripts/export_cover_variants.sh out/cover.jpg
 set -euo pipefail
 
@@ -18,15 +19,22 @@ LAND_JPG="${DIR}/${STEM}-横4x3.jpg"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-ffmpeg -y -i "$SRC" \
-  -vf "scale=1080:1440:force_original_aspect_ratio=increase,crop=1080:1440" \
-  -frames:v 1 "$TMP_DIR/port.png" >/dev/null 2>&1
-ffmpeg -y -i "$SRC" \
-  -vf "crop=1080:810:0:380,scale=1440:1080" \
-  -frames:v 1 "$TMP_DIR/land.png" >/dev/null 2>&1
+# Prefer Remotion-rendered portrait if present (exact 3:4 poster layout).
+PORT_SRC="${DIR}/${STEM}-竖3x4-render.jpg"
+if [[ -f "$PORT_SRC" ]]; then
+  sips -s format jpeg -s formatOptions 95 "$PORT_SRC" --out "$PORT_JPG" >/dev/null
+else
+  # Fallback: letterbox full 9:16 poster into 3:4 (no content cut).
+  ffmpeg -y -i "$SRC" \
+    -vf "scale=1080:1440:force_original_aspect_ratio=decrease,pad=1080:1440:(ow-iw)/2:(oh-ih)/2:black" \
+    -frames:v 1 "$TMP_DIR/port.png" >/dev/null 2>&1
+  sips -s format jpeg -s formatOptions 95 "$TMP_DIR/port.png" --out "$PORT_JPG" >/dev/null
+fi
 
-# JFIF JPEG via sips (Douyin-friendly)
-sips -s format jpeg -s formatOptions 95 "$TMP_DIR/port.png" --out "$PORT_JPG" >/dev/null
+# Landscape: letterbox full poster into 4:3 (keep date + turnover + in/out cards).
+ffmpeg -y -i "$SRC" \
+  -vf "scale=1440:1080:force_original_aspect_ratio=decrease,pad=1440:1080:(ow-iw)/2:(oh-ih)/2:black" \
+  -frames:v 1 "$TMP_DIR/land.png" >/dev/null 2>&1
 sips -s format jpeg -s formatOptions 95 "$TMP_DIR/land.png" --out "$LAND_JPG" >/dev/null
 
 echo "cover: $SRC"

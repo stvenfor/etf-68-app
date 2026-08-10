@@ -131,6 +131,23 @@ def collect_bars(
     return bars_by_code, errors
 
 
+# SZSE xlsx caps around 65k rows (~90 ETF-days). Wide calendar spans also return
+# an empty stub ("没有找到符合条件的数据"). Chunk trading days to stay safe.
+SZSE_SHARE_CHUNK_TRADING_DAYS = 15
+
+
+def _szse_date_chunks(all_dates: list) -> list[tuple]:
+    """Split sorted trading dates into inclusive (start, end) chunks."""
+    if not all_dates:
+        return []
+    step = max(1, SZSE_SHARE_CHUNK_TRADING_DAYS)
+    chunks: list[tuple] = []
+    for i in range(0, len(all_dates), step):
+        chunk = all_dates[i : i + step]
+        chunks.append((chunk[0], chunk[-1]))
+    return chunks
+
+
 def collect_shares(
     codes: list[str],
     bars_by_code: dict[str, list[DailyBar]],
@@ -139,11 +156,12 @@ def collect_shares(
     errors: dict[str, str] = {}
     sse_codes = {code for code in codes if code.startswith("5")}
     szse_codes = set(codes) - sse_codes
+    # ~120 trading days for ETF panorama charts; flow1/5/10 still use recent windows.
     all_dates = sorted(
         {
             bar.date
             for bars in bars_by_code.values()
-            for bar in bars[-21:]
+            for bar in bars[-120:]
         }
     )
     sse_failed_dates = 0
@@ -158,16 +176,26 @@ def collect_shares(
     if all_dates and sse_failed_dates == len(all_dates):
         errors.update({code: "sse_share_endpoint_unavailable" for code in sse_codes})
     if szse_codes and all_dates:
-        try:
-            points = _retry(
-                lambda: SzseShareProvider().fetch_range(all_dates[0], all_dates[-1])
-            )
+        szse = SzseShareProvider()
+        szse_failed_chunks = 0
+        chunks = _szse_date_chunks(all_dates)
+        seen: set[tuple[str, object]] = set()
+        for start, end in chunks:
+            try:
+                points = _retry(lambda s=start, e=end: szse.fetch_range(s, e))
+            except Exception:
+                szse_failed_chunks += 1
+                continue
             for point in points:
-                if point.code in szse_codes:
-                    by_code[point.code].append(point)
-        except Exception as exc:
-            reason = getattr(exc, "reason", "szse_share_endpoint_unavailable")
-            errors.update({code: reason for code in szse_codes})
+                if point.code not in szse_codes:
+                    continue
+                key = (point.code, point.date)
+                if key in seen:
+                    continue
+                seen.add(key)
+                by_code[point.code].append(point)
+        if chunks and szse_failed_chunks == len(chunks):
+            errors.update({code: "szse_share_endpoint_unavailable" for code in szse_codes})
     for code in codes:
         if code not in errors and not by_code.get(code):
             errors[code] = "share_code_not_found"

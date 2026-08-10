@@ -1,0 +1,822 @@
+{
+  "assetList": [
+    {
+      "name": "大成安享得利六个月持有混合C",
+      "code": "010941",
+      "amount": 158761.18,
+      "cost": 157000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "易方达瑞锦灵活配置混合C",
+      "code": "009690",
+      "amount": 158186.78,
+      "cost": 158255.68,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华夏稳享增利6个月债券A",
+      "code": "015716",
+      "amount": 156515.44,
+      "cost": 149673.06,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "汇添富鑫享添利六个月持有期混合A",
+      "code": "012951",
+      "amount": 119632.4,
+      "cost": 119737.63,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "海富通欣睿混合C",
+      "code": "010658",
+      "amount": 90487.71,
+      "cost": 89859.75,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "鹏华弘利混合C",
+      "code": "001123",
+      "amount": 67168.93,
+      "cost": 67005.24,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "汇添富保鑫灵活配置混合C",
+      "code": "012607",
+      "amount": 58828.26,
+      "cost": 58911.37,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "广发恒荣三个月持有期混合C",
+      "code": "011193",
+      "amount": 58169.48,
+      "cost": 57937.24,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "上银丰瑞一年持有期混合发起式C",
+      "code": "019788",
+      "amount": 52725.65,
+      "cost": 50000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "汇添富稳健鑫添益六个月持有混合A",
+      "code": "010870",
+      "amount": 50178.1,
+      "cost": 50000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "大成月添利一个月滚动持有中短债A",
+      "code": "090021",
+      "amount": 50128.17,
+      "cost": 50000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "中邮纯债恒利债券C",
+      "code": "002277",
+      "amount": 47224.44,
+      "cost": 47120,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华泰保兴尊睿6个月持有期债券A",
+      "code": "018846",
+      "amount": 42202.66,
+      "cost": 42000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华泰保兴尊睿6个月持有期债券C",
+      "code": "018847",
+      "amount": 30950,
+      "cost": 30800,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "景顺长城景颐招利6个月持有期债券A",
+      "code": "010011",
+      "amount": 30849.01,
+      "cost": 30324,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "信澳稳悦60天滚动持有债券C",
+      "code": "022404",
+      "amount": 28653.52,
+      "cost": 28600,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "景顺长城安享回报混合C",
+      "code": "001423",
+      "amount": 24608.88,
+      "cost": 24586.76,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "景顺长城景颐嘉利6个月持有期债券A",
+      "code": "008999",
+      "amount": 19995.66,
+      "cost": 20000,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "易方达新鑫灵活配置混合E",
+      "code": "001286",
+      "amount": 10469.33,
+      "cost": 10425,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "上银丰瑞一年持有期混合发起式A",
+      "code": "019787",
+      "amount": 10105.42,
+      "cost": 9545.07,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华泰柏瑞鼎利灵活配置混合C",
+      "code": "004011",
+      "amount": 9700.41,
+      "cost": 9744.99,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "融通稳信增益6个月持有期混合C",
+      "code": "012525",
+      "amount": 9387.08,
+      "cost": 9500,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华商双翼平衡混合C",
+      "code": "002176",
+      "amount": 7616.93,
+      "cost": 8500,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "招商安瑞进取债券C",
+      "code": "019500",
+      "amount": 7448.36,
+      "cost": 7500,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "景顺长城景颐双利债券C",
+      "code": "000386",
+      "amount": 5007.4,
+      "cost": 5020,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "广发恒荣三个月持有期混合A",
+      "code": "011192",
+      "amount": 3911.43,
+      "cost": 3900,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "天弘恒生科技ETF联接(QDII)C",
+      "code": "012349",
+      "amount": 3823.9,
+      "cost": 4300,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "博时恒乐债券C",
+      "code": "014847",
+      "amount": 3574.82,
+      "cost": 3600,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "中信保诚多策略混合(LOF)C",
+      "code": "018561",
+      "amount": 3132.3,
+      "cost": 3342.27,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "鹏华双债加利债券C",
+      "code": "013149",
+      "amount": 3049.54,
+      "cost": 3086.81,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华宝新兴消费混合C",
+      "code": "011154",
+      "amount": 2164.7,
+      "cost": 2240,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "中欧瑾通灵活配置混合C",
+      "code": "002010",
+      "amount": 1350.78,
+      "cost": 1353.81,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华夏新锦绣灵活配置混合C",
+      "code": "002834",
+      "amount": 1202.85,
+      "cost": 1217.96,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "建信新兴市场优选混合(QDII)C",
+      "code": "018147",
+      "amount": 798.21,
+      "cost": 870,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "景顺长城稳健回报灵活配置混合C",
+      "code": "001407",
+      "amount": 582.44,
+      "cost": 571.96,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "摩根标普500指数(QDII)C",
+      "code": "019305",
+      "amount": 445,
+      "cost": 438.06,
+      "type": "sp500",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "国金量化多因子股票C",
+      "code": "016858",
+      "amount": 429.62,
+      "cost": 439.34,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "金信精选成长混合C",
+      "code": "018777",
+      "amount": 386.67,
+      "cost": 372.81,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "易方达全球成长精选混合(QDII)C",
+      "code": "012922",
+      "amount": 281.42,
+      "cost": 350,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "永赢鑫欣混合C",
+      "code": "018603",
+      "amount": 247.16,
+      "cost": 243.02,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华夏磐泰混合(LOF)C",
+      "code": "013360",
+      "amount": 186.25,
+      "cost": 186,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "汇添富科技创新混合C",
+      "code": "007356",
+      "amount": 173.52,
+      "cost": 176,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "宏利转型机遇股票C",
+      "code": "012800",
+      "amount": 124.34,
+      "cost": 122.98,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "摩根纳斯达克100指数(QDII)C",
+      "code": "019173",
+      "amount": 93.11,
+      "cost": 90.63,
+      "type": "nasdaq",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "大摩数字经济混合C",
+      "code": "017103",
+      "amount": 59.2,
+      "cost": 60,
+      "type": "other",
+      "plan": "定投",
+      "judge": "",
+      "dca": {
+        "enabled": true,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "永赢科技智选混合发起C",
+      "code": "022365",
+      "amount": 16.17,
+      "cost": 10,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "东财启和混合C",
+      "code": "025369",
+      "amount": 10.17,
+      "cost": 10,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    },
+    {
+      "name": "华宝致远混合(QDII)C",
+      "code": "008254",
+      "amount": 7.89,
+      "cost": 10,
+      "type": "other",
+      "plan": "",
+      "judge": "",
+      "dca": {
+        "enabled": false,
+        "daily": 0,
+        "lastDate": "",
+        "acc": 0
+      },
+      "date": "2026-08-09",
+      "done": false
+    }
+  ],
+  "rebalanceList": [],
+  "updatedAt": "2026-08-10T16:17:19+08:00"
+}

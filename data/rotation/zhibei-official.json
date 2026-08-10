@@ -1,0 +1,45 @@
+{
+  "id": "514c372c-0d6e-4b30-810d-774a0c7418ae",
+  "name": "我的策略",
+  "config": {
+    "codes": ["159915.XSHE", "513100.XSHG", "512890.XSHG", "518880.XSHG"],
+    "benchmark_code": "510300.XSHG",
+    "start": "2025-01-01",
+    "end": "2026-08-07",
+    "momentum_days": 25,
+    "hold_count": 1,
+    "scoring_method": "log_trend",
+    "rebalance_frequency": "daily",
+    "weekly_day": 0,
+    "monthly_day": 1,
+    "execution_time": "10:00:00",
+    "slippage_rate": 0.001,
+    "commission_rate": 0.0002,
+    "defensive_enabled": false,
+    "timing": {
+      "absolute_momentum_enabled": false,
+      "absolute_momentum_days": 20,
+      "absolute_momentum_min_score": 0,
+      "ma_filter_enabled": false,
+      "ma_days": 20,
+      "ma_filter_target": "candidate",
+      "ma_filter_action": "skip",
+      "breadth_filter_enabled": false,
+      "breadth_filter_method": "above_ma",
+      "breadth_filter_days": 20,
+      "breadth_min_ratio": 0.5
+    },
+    "risk_control": {
+      "crash_protection_enabled": false,
+      "crash_lookback_days": 5,
+      "crash_return_threshold": -0.06,
+      "crash_target": "current_or_candidate",
+      "crash_cooldown_days": 3,
+      "portfolio_drawdown_enabled": false,
+      "portfolio_drawdown_threshold": 0.12,
+      "portfolio_drawdown_recovery_score": 0
+    },
+    "template_id": "classic",
+    "signal_interval": "daily"
+  }
+}

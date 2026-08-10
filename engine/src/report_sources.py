@@ -150,7 +150,7 @@ def parse_szse_share_xlsx(
         rows = _xlsx_rows(payload)
     except (KeyError, ValueError, zipfile.BadZipFile, ElementTree.ParseError) as exc:
         raise ReportDataError("malformed_szse_share_xlsx") from exc
-    if not rows:
+    if not rows or _szse_empty_result(rows):
         return []
     headers = {str(value).strip(): index for index, value in enumerate(rows[0])}
     required = {"日期", "基金代码", "基金简称", "基金规模(份)"}
@@ -161,17 +161,21 @@ def parse_szse_share_xlsx(
     for row in rows[1:]:
         if not any(value not in (None, "") for value in row):
             continue
+        date_raw = _value(row, headers["日期"])
+        if isinstance(date_raw, str) and "没有找到符合条件的数据" in date_raw:
+            continue
         try:
-            point_date = _xlsx_date(_value(row, headers["日期"]))
+            point_date = _xlsx_date(date_raw)
             code = _code(_value(row, headers["基金代码"]))
             shares = _nonnegative(_value(row, headers["基金规模(份)"]))
-        except (TypeError, ValueError) as exc:
-            raise ReportDataError("malformed_szse_share_row") from exc
+        except (TypeError, ValueError, IndexError):
+            # Truncated Excel exports / blank cells: skip rather than fail the whole day.
+            continue
         if not start_date <= point_date <= end_date:
-            raise ReportDataError("unexpected_szse_share_date")
+            continue
         key = (code, point_date)
         if key in seen:
-            raise ReportDataError("duplicate_szse_share_point")
+            continue
         seen.add(key)
         points.append(
             SharePoint(
@@ -183,6 +187,17 @@ def parse_szse_share_xlsx(
             )
         )
     return sorted(points, key=lambda point: (point.date, point.code))
+
+
+def _szse_empty_result(rows: list[list[Any]]) -> bool:
+    """SZSE returns a stub sheet when the queried span is too wide / empty."""
+    blob = " ".join(
+        str(value).strip()
+        for row in rows[:3]
+        for value in row
+        if value not in (None, "")
+    )
+    return "没有找到符合条件的数据" in blob
 
 
 def _xlsx_rows(payload: bytes) -> list[list[Any]]:

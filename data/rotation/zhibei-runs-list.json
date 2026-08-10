@@ -1,0 +1,116 @@
+{
+  "items": [
+    {
+      "id": "9c372fad-3744-4f6c-92cc-23fa6619ecf3",
+      "strategy_id": "514c372c-0d6e-4b30-810d-774a0c7418ae",
+      "strategy_version_id": "5e2a69bc-1e3b-405d-a0a2-b24ac31038b3",
+      "strategy_version_number": 2,
+      "strategy_name": "我的策略",
+      "config_snapshot": {
+        "strategy_type": "rotation",
+        "codes": [
+          "159915.XSHE",
+          "513100.XSHG",
+          "512890.XSHG",
+          "518880.XSHG"
+        ],
+        "benchmark_code": "510300.XSHG",
+        "start": "2025-01-01",
+        "end": "2026-08-07",
+        "momentum_days": 25,
+        "hold_count": 1,
+        "scoring_method": "log_trend",
+        "rebalance_frequency": "daily",
+        "execution_time": "10:00:00",
+        "slippage_rate": 0.001,
+        "commission_rate": 0.0002,
+        "defensive_enabled": false,
+        "timing": {
+          "absolute_momentum_enabled": false,
+          "ma_filter_enabled": false,
+          "breadth_filter_enabled": false
+        },
+        "risk_control": {
+          "crash_protection_enabled": false,
+          "portfolio_drawdown_enabled": false
+        },
+        "signal_interval": "daily"
+      },
+      "result": {
+        "metrics": {
+          "annualized_return": 0.3476997607996042,
+          "max_drawdown": -0.2084236270585352,
+          "trade_count": 25
+        },
+        "equity_curve": [],
+        "trades": [],
+        "current_suggestion": {
+          "date": "2026-08-07",
+          "target_holdings": [
+            "512890.XSHG"
+          ],
+          "defensive": false,
+          "scores": [
+            {
+              "code": "512890.XSHG",
+              "annualized_return": 1.361537496801903,
+              "r_squared": 0.7787060549735535,
+              "score": 1.060237492833177
+            },
+            {
+              "code": "513100.XSHG",
+              "annualized_return": -0.07207649536976768,
+              "r_squared": 0.008471496742153084,
+              "score": -0.0006105957957107987
+            },
+            {
+              "code": "518880.XSHG",
+              "annualized_return": -0.060215327327770796,
+              "r_squared": 0.015483993413662467,
+              "score": -0.0009323737317447325
+            },
+            {
+              "code": "159915.XSHE",
+              "annualized_return": -0.838435272510707,
+              "r_squared": 0.7198359432400498,
+              "score": -0.603535845233473
+            }
+          ]
+        }
+      },
+      "created_at": "2026-08-10T07:33:35.852071+00:00",
+      "updated_at": "2026-08-10T07:33:35.852075+00:00"
+    },
+    {
+      "id": "1f83bca9-9d4c-4842-8126-0abcd77d14a7",
+      "strategy_id": "d47a64b4-7bcf-445f-982f-97ada7afa52f",
+      "strategy_name": "我的策略",
+      "config_snapshot": {
+        "codes": [
+          "510300.XSHG",
+          "159915.XSHE",
+          "513100.XSHG"
+        ],
+        "scoring_method": "log_trend",
+        "momentum_days": 25,
+        "hold_count": 1
+      },
+      "result": {
+        "metrics": {
+          "annualized_return": 0.47525412336171247,
+          "max_drawdown": -0.21586825619254077,
+          "trade_count": 15
+        },
+        "equity_curve": [],
+        "current_suggestion": {
+          "date": "2026-08-07",
+          "target_holdings": [
+            "513100.XSHG"
+          ],
+          "scores": []
+        }
+      },
+      "updated_at": "2026-08-09T14:29:20.843634+00:00"
+    }
+  ]
+}

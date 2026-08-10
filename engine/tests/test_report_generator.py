@@ -101,6 +101,22 @@ class ReportGeneratorTests(unittest.TestCase):
             row["wmDailySignal"],
             {"做多信号", "等日线", "日线过热", "方向未齐", "不做多"},
         )
+        series = row["panoramaSeries"]
+        self.assertGreaterEqual(len(series), 2)
+        self.assertIn("date", series[-1])
+        self.assertIn("netFlowYi", series[-1])
+        self.assertIn("amountYi", series[-1])
+        self.assertIn("sharesYi", series[-1])
+        self.assertIn("close", series[-1])
+        summary = row["panoramaSummary"]
+        self.assertIsNotNone(summary["avgAmountYi"])
+        self.assertIn("flow3Yi", summary)
+        self.assertIn("flow5Yi", summary)
+        self.assertIn("flow10Yi", summary)
+        # Fixture has continuous shares → enough daily net-flow samples for 3/5/10.
+        self.assertIsNotNone(summary["flow3Yi"])
+        self.assertIsNotNone(summary["flow5Yi"])
+        self.assertIsNotNone(summary["flow10Yi"])
         self.assertIn(
             row["maMacdVol"],
             {"可买入", "等量能", "量能存疑", "等买点", "方向未齐", "暂缓"},

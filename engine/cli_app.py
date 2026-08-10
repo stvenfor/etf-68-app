@@ -245,6 +245,10 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
                 "flow1": _flow_yi(r.get("flows"), "1"),
                 "flow5": _flow_yi(r.get("flows"), "5"),
                 "flow10": _flow_yi(r.get("flows"), "10"),
+                "panoramaSeries": r.get("panoramaSeries") or [],
+                "panoramaSummary": r.get("panoramaSummary")
+                if isinstance(r.get("panoramaSummary"), dict)
+                else None,
                 "sector": sector_cn.get(sector_key, sector_key),
                 "reportIndex": i,
                 "kdjMacdRef": kd.get("kdjMacdRef") or "—",
@@ -620,6 +624,277 @@ def cmd_my_holdings(args: argparse.Namespace) -> int:
         summary = _refresh_my_holdings(output=out)
         print(json.dumps(summary, ensure_ascii=False))
         return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_finance_news(args: argparse.Namespace) -> int:
+    """Refresh 理财每日新知 into data/finance/data.json."""
+    from src.finance_research import refresh_finance_news
+
+    try:
+        summary = refresh_finance_news(limit=int(args.limit or 12))
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0 if summary.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_index_track(args: argparse.Namespace) -> int:
+    """Refresh 指数跟踪表 into data/finance/data.json."""
+    from src.finance_research import refresh_index_track
+
+    try:
+        summary = refresh_index_track()
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0 if summary.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_finance_quotes(args: argparse.Namespace) -> int:
+    """Refresh fund quotes for assetList + index map funds."""
+    from src.finance_research import refresh_fund_quotes
+
+    try:
+        summary = refresh_fund_quotes()
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0 if summary.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_finance_ocr(args: argparse.Namespace) -> int:
+    """OCR a fund-app screenshot into candidate holdings."""
+    from src.finance_research import ocr_image
+
+    try:
+        summary = ocr_image(args.image)
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0 if summary.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_rotation_strategies(args: argparse.Namespace) -> int:
+    from src.rotation import service as rotation_service
+
+    action = args.action
+    try:
+        if action == "list":
+            doc = rotation_service.list_strategies()
+            print(json.dumps({"ok": True, **doc}, ensure_ascii=False))
+            return 0
+        if action == "get":
+            from src.rotation.store import get_strategy
+
+            item = get_strategy(args.id)
+            if not item:
+                print(
+                    json.dumps(
+                        {"ok": False, "error": f"strategy_not_found:{args.id}"},
+                        ensure_ascii=False,
+                    )
+                )
+                return 1
+            print(json.dumps({"ok": True, "item": item}, ensure_ascii=False))
+            return 0
+        if action == "activate":
+            doc = rotation_service.activate_strategy(args.id)
+            print(json.dumps({"ok": True, **doc}, ensure_ascii=False))
+            return 0
+        if action == "save":
+            raw = args.config_json
+            if args.config_file:
+                raw = Path(args.config_file).read_text(encoding="utf-8")
+            if not raw:
+                raw = sys.stdin.read()
+            config = json.loads(raw)
+            if isinstance(config, dict) and "config" in config and "name" in config:
+                name = str(config.get("name") or args.name or "未命名策略")
+                sid = config.get("id") or args.id
+                cfg = config.get("config") or {}
+            else:
+                name = args.name or "未命名策略"
+                sid = args.id
+                cfg = config
+            item = rotation_service.save_strategy(
+                strategy_id=sid,
+                name=name,
+                config=cfg,
+                make_active=not args.no_activate,
+            )
+            print(json.dumps({"ok": True, "item": item}, ensure_ascii=False))
+            return 0
+        if action == "delete":
+            doc = rotation_service.delete_strategy(args.id)
+            print(json.dumps({"ok": True, **doc}, ensure_ascii=False))
+            return 0
+        if action == "duplicate":
+            item = rotation_service.duplicate_strategy(args.id, new_name=args.name)
+            print(json.dumps({"ok": True, "item": item}, ensure_ascii=False))
+            return 0
+        if action == "import-zhibei":
+            from src.rotation.store import save_doc, load_doc
+            from src.rotation.zhibei_import import ZHIBEI_CLONE_ID, from_zhibei_config
+            from src.rotation.config import strategy_record
+
+            raw = args.config_json
+            if args.config_file:
+                raw = Path(args.config_file).read_text(encoding="utf-8")
+            if not raw:
+                raw = sys.stdin.read()
+            payload = json.loads(raw)
+            from src.rotation.zhibei_import import DEFAULT_ZHIBEI_STRATEGY_ID
+
+            website_sid = args.website_strategy_id or DEFAULT_ZHIBEI_STRATEGY_ID
+            cfg = from_zhibei_config(payload, strategy_id=website_sid)
+            name = args.name or "网站策略克隆（log_trend/四池）"
+            sid = args.id or ZHIBEI_CLONE_ID
+            item = strategy_record(
+                strategy_id=sid,
+                name=name,
+                config=cfg,
+                readonly=True,
+                approx=False,
+            )
+            doc = load_doc()
+            replaced = False
+            for i, old in enumerate(doc["items"]):
+                if old.get("id") == sid:
+                    doc["items"][i] = item
+                    replaced = True
+                    break
+            if not replaced:
+                doc["items"].insert(0, item)
+            if not args.no_activate:
+                doc["active_id"] = sid
+            save_doc(doc)
+            print(json.dumps({"ok": True, "item": item}, ensure_ascii=False))
+            return 0
+        print(json.dumps({"ok": False, "error": f"unknown_action:{action}"}, ensure_ascii=False))
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_rotation_public(_: argparse.Namespace) -> int:
+    from src.rotation import service as rotation_service
+
+    try:
+        payload = rotation_service.fetch_public()
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0 if payload.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_rotation_run(args: argparse.Namespace) -> int:
+    from src.rotation import service as rotation_service
+
+    try:
+        config = None
+        if args.config_file:
+            config = json.loads(Path(args.config_file).read_text(encoding="utf-8"))
+        elif args.config_json:
+            config = json.loads(args.config_json)
+        elif args.stdin_config:
+            config = json.loads(sys.stdin.read())
+        out = Path(args.output) if args.output else None
+        payload = rotation_service.run_rotation(
+            strategy_id=args.strategy_id,
+            config=config,
+            include_public=not args.no_public,
+            output_path=out,
+            workers=int(args.workers or 4),
+        )
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0 if payload.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_rotation_last(_: argparse.Namespace) -> int:
+    from src.rotation import service as rotation_service
+
+    payload = rotation_service.load_last()
+    if not payload:
+        print(json.dumps({"ok": False, "error": "rotation_last_missing"}, ensure_ascii=False))
+        return 1
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
+def cmd_rotation_account_ref(args: argparse.Namespace) -> int:
+    """Import / show Mode B account simulation snapshot (zhibei-reference.json)."""
+    from src.rotation.account_ref import (
+        default_account_ref_path,
+        import_account_reference,
+        load_account_reference,
+    )
+
+    action = args.action
+    try:
+        if action == "show":
+            snap = load_account_reference()
+            print(json.dumps(snap, ensure_ascii=False))
+            return 0 if snap.get("ok") else 1
+        if action == "import":
+            raw = args.json
+            if args.file:
+                raw = Path(args.file).read_text(encoding="utf-8")
+            if not raw:
+                raw = sys.stdin.read()
+            if not raw or not str(raw).strip():
+                print(json.dumps({"ok": False, "error": "empty_payload"}, ensure_ascii=False))
+                return 1
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                print(json.dumps({"ok": False, "error": "payload_must_be_object"}, ensure_ascii=False))
+                return 1
+            snap = import_account_reference(payload, strategy_id=args.strategy_id)
+            eq = snap.get("equity") or {}
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "path": str(default_account_ref_path()),
+                        "strategy_id": snap.get("strategy_id"),
+                        "equity_source": snap.get("equity_source"),
+                        "equity_points": len(eq.get("dates") or []),
+                        "total_return_pct": snap.get("total_return_pct"),
+                        "max_drawdown_pct": snap.get("max_drawdown_pct"),
+                        "hold_code": snap.get("hold_code"),
+                        "rankings": len(snap.get("rankings") or []),
+                        "note": snap.get("note"),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return 0 if (eq.get("dates") and eq.get("nav")) else 2
+        print(json.dumps({"ok": False, "error": f"unknown_action:{action}"}, ensure_ascii=False))
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
+def cmd_finance_dca(args: argparse.Namespace) -> int:
+    """Apply daily DCA accumulation on assetList."""
+    from src.finance_research import apply_dca_daily
+
+    try:
+        summary = apply_dca_daily()
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0 if summary.get("ok") else 1
     except Exception as exc:  # noqa: BLE001
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
         return 1
@@ -1082,6 +1357,82 @@ def main() -> int:
         help="Also soft-refresh 实质利好/利空 live headlines",
     )
     p_board.set_defaults(func=cmd_refresh_board)
+
+    p_fn = sub.add_parser("finance-news", help="Refresh 理财每日新知 into data/finance/data.json")
+    p_fn.add_argument("--limit", type=int, default=12)
+    p_fn.set_defaults(func=cmd_finance_news)
+
+    p_ix = sub.add_parser("index-track", help="Refresh 指数跟踪 into data/finance/data.json")
+    p_ix.set_defaults(func=cmd_index_track)
+
+    p_fq = sub.add_parser("finance-quotes", help="Refresh fund quotes for assetList + index map")
+    p_fq.set_defaults(func=cmd_finance_quotes)
+
+    p_ocr = sub.add_parser("finance-ocr", help="OCR fund-app screenshot → candidate holdings")
+    p_ocr.add_argument("--image", required=True, help="Absolute path to screenshot")
+    p_ocr.set_defaults(func=cmd_finance_ocr)
+
+    p_dca = sub.add_parser("finance-dca", help="Apply daily DCA accumulation on assetList")
+    p_dca.set_defaults(func=cmd_finance_dca)
+
+    p_rot = sub.add_parser("rotation-strategies", help="CRUD local ETF rotation strategies")
+    p_rot.add_argument(
+        "action",
+        choices=("list", "get", "save", "delete", "duplicate", "activate", "import-zhibei"),
+    )
+    p_rot.add_argument("--id", default=None, help="Strategy id")
+    p_rot.add_argument("--name", default=None, help="Strategy display name")
+    p_rot.add_argument("--config-json", default=None, help="Inline JSON config or {id,name,config}")
+    p_rot.add_argument("--config-file", default=None, help="Path to JSON config")
+    p_rot.add_argument(
+        "--no-activate",
+        action="store_true",
+        help="Do not mark saved strategy as active",
+    )
+    p_rot.add_argument(
+        "--website-strategy-id",
+        default=None,
+        help="When importing /strategies list, pick this website strategy id",
+    )
+    p_rot.set_defaults(func=cmd_rotation_strategies)
+
+    p_rot_pub = sub.add_parser("rotation-public", help="Fetch 小薪 public rotation snapshot")
+    p_rot_pub.set_defaults(func=cmd_rotation_public)
+
+    p_rot_run = sub.add_parser("rotation-run", help="Run local ETF rotation backtest")
+    p_rot_run.add_argument("--strategy-id", default=None)
+    p_rot_run.add_argument("--config-json", default=None)
+    p_rot_run.add_argument("--config-file", default=None)
+    p_rot_run.add_argument(
+        "--stdin-config",
+        action="store_true",
+        help="Read full config JSON from stdin",
+    )
+    p_rot_run.add_argument("--output", default=None, help="Write rotation-last.json path")
+    p_rot_run.add_argument("--workers", type=int, default=4)
+    p_rot_run.add_argument(
+        "--no-public",
+        action="store_true",
+        help="Skip fetching public xiaoxin snapshot",
+    )
+    p_rot_run.set_defaults(func=cmd_rotation_run)
+
+    p_rot_last = sub.add_parser("rotation-last", help="Print cached rotation-last.json")
+    p_rot_last.set_defaults(func=cmd_rotation_last)
+
+    p_rot_aref = sub.add_parser(
+        "rotation-account-ref",
+        help="Import/show Mode B account simulation snapshot (zhibei-reference.json)",
+    )
+    p_rot_aref.add_argument("action", choices=("import", "show"))
+    p_rot_aref.add_argument("--file", default=None, help="Path to browser-copied /strategies JSON")
+    p_rot_aref.add_argument("--json", default=None, help="Inline JSON payload")
+    p_rot_aref.add_argument(
+        "--strategy-id",
+        default="514c372c-0d6e-4b30-810d-774a0c7418ae",
+        help="Prefer this strategy id when payload is a list",
+    )
+    p_rot_aref.set_defaults(func=cmd_rotation_account_ref)
 
     args = ap.parse_args()
     return int(args.func(args))

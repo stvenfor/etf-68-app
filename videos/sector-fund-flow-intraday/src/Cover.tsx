@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill} from 'remotion';
+import {AbsoluteFill, useVideoConfig} from 'remotion';
 import type {CompositionProps} from './data/schema';
 
 const GREEN = '#9AFFB5';
@@ -19,7 +19,20 @@ function signedLabel(delta: number): {text: string; color: string} {
   return {text: '持平', color: '#b0b6bd'};
 }
 
+/**
+ * Poster cover for Douyin / desktop.
+ * Layout adapts to 9:16 (1080×1920) and 3:4 (1080×1440) so Feed 竖封面
+ * matches the designed poster — do not freeze a video frame.
+ */
 export const Cover: React.FC<CompositionProps> = ({data}) => {
+  const {height} = useVideoConfig();
+  const compact = height <= 1500;
+  const padY = compact ? 64 : 140;
+  const padX = compact ? 48 : 56;
+  const dateSize = compact ? 78 : 92;
+  const amountSize = compact ? 58 : 68;
+  const titleSize = compact ? 30 : 34;
+
   const stats = data.marketStats;
   const vsPrev = signedLabel(stats.vsPrevDayYi);
   const vsFive = signedLabel(stats.vsFiveDayAvgYi);
@@ -48,7 +61,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
         style={{
           position: 'absolute',
           left: -120,
-          top: 520,
+          top: compact ? 360 : 520,
           width: 520,
           height: 520,
           borderRadius: '50%',
@@ -60,7 +73,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
         style={{
           position: 'absolute',
           right: -100,
-          top: 620,
+          top: compact ? 420 : 620,
           width: 480,
           height: 480,
           borderRadius: '50%',
@@ -74,7 +87,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
           position: 'relative',
           zIndex: 1,
           height: '100%',
-          padding: '140px 56px 110px',
+          padding: `${padY}px ${padX}px`,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
@@ -99,8 +112,8 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
         <div
           style={{
-            marginTop: 28,
-            fontSize: 92,
+            marginTop: compact ? 18 : 28,
+            fontSize: dateSize,
             fontWeight: 800,
             letterSpacing: 2,
             fontVariantNumeric: 'tabular-nums',
@@ -117,7 +130,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
         <div
           style={{
-            marginTop: 18,
+            marginTop: 16,
             width: 180,
             height: 4,
             borderRadius: 2,
@@ -127,8 +140,8 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
         <div
           style={{
-            marginTop: 28,
-            fontSize: 34,
+            marginTop: compact ? 18 : 28,
+            fontSize: titleSize,
             fontWeight: 700,
             color: '#e8eef5',
             letterSpacing: 2,
@@ -139,8 +152,8 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
         <div
           style={{
-            marginTop: 48,
-            padding: '32px 30px',
+            marginTop: compact ? 28 : 48,
+            padding: compact ? '24px 26px' : '32px 30px',
             borderRadius: 24,
             border: '1px solid rgba(255,255,255,0.1)',
             background:
@@ -154,7 +167,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
           <div
             style={{
               marginTop: 10,
-              fontSize: 68,
+              fontSize: amountSize,
               fontWeight: 800,
               fontVariantNumeric: 'tabular-nums',
               letterSpacing: 1,
@@ -167,10 +180,10 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
           <div
             style={{
-              marginTop: 24,
+              marginTop: 20,
               display: 'flex',
               flexDirection: 'column',
-              gap: 14,
+              gap: 12,
             }}
           >
             <div
@@ -181,13 +194,13 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
                 gap: 16,
               }}
             >
-              <span style={{color: '#a8b0b8', fontSize: 24, fontWeight: 600}}>
+              <span style={{color: '#a8b0b8', fontSize: 22, fontWeight: 600}}>
                 相比上一交易日
               </span>
               <span
                 style={{
                   color: vsPrev.color,
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: 800,
                   fontVariantNumeric: 'tabular-nums',
                 }}
@@ -203,13 +216,13 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
                 gap: 16,
               }}
             >
-              <span style={{color: '#a8b0b8', fontSize: 24, fontWeight: 600}}>
+              <span style={{color: '#a8b0b8', fontSize: 22, fontWeight: 600}}>
                 相比近五日日均
               </span>
               <span
                 style={{
                   color: vsFive.color,
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: 800,
                   fontVariantNumeric: 'tabular-nums',
                 }}
@@ -220,11 +233,11 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
           </div>
         </div>
 
-        <div style={{marginTop: 28, display: 'flex', gap: 18}}>
+        <div style={{marginTop: compact ? 18 : 28, display: 'flex', gap: 16}}>
           <div
             style={{
               flex: 1,
-              padding: '22px 20px',
+              padding: '18px 18px',
               borderRadius: 18,
               border: '1px solid rgba(154,255,181,0.25)',
               background: 'rgba(20,40,28,0.55)',
@@ -233,14 +246,14 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
             <div style={{color: GREEN, fontSize: 20, fontWeight: 700}}>
               流出最多
             </div>
-            <div style={{marginTop: 10, fontSize: 30, fontWeight: 800}}>
+            <div style={{marginTop: 8, fontSize: 28, fontWeight: 800}}>
               {topOut?.name ?? '—'}
             </div>
             <div
               style={{
-                marginTop: 6,
+                marginTop: 4,
                 color: GREEN,
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: 700,
                 fontVariantNumeric: 'tabular-nums',
               }}
@@ -251,7 +264,7 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
           <div
             style={{
               flex: 1,
-              padding: '22px 20px',
+              padding: '18px 18px',
               borderRadius: 18,
               border: '1px solid rgba(255,90,90,0.25)',
               background: 'rgba(40,18,18,0.55)',
@@ -260,14 +273,14 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
             <div style={{color: RED, fontSize: 20, fontWeight: 700}}>
               流入最多
             </div>
-            <div style={{marginTop: 10, fontSize: 30, fontWeight: 800}}>
+            <div style={{marginTop: 8, fontSize: 28, fontWeight: 800}}>
               {topIn?.name ?? '—'}
             </div>
             <div
               style={{
-                marginTop: 6,
+                marginTop: 4,
                 color: RED,
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: 700,
                 fontVariantNumeric: 'tabular-nums',
               }}
@@ -279,9 +292,9 @@ export const Cover: React.FC<CompositionProps> = ({data}) => {
 
         <div
           style={{
-            marginTop: 48,
+            marginTop: compact ? 28 : 48,
             color: '#7a828c',
-            fontSize: 18,
+            fontSize: 17,
             lineHeight: 1.5,
           }}
         >

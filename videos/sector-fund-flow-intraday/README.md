@@ -33,11 +33,16 @@ python3 scripts/generate_demo_flow.py \
 npm install
 npm run render
 npm run validate
-npm run cover   # SectorFundFlowCover 海报构图 → out/cover.jpg + 竖3x4/横4x3 JPG
+npm run cover   # 9:16 海报 + 3:4 Remotion 竖封面 + 4:3 letterbox 横封面
 ```
 
 输出：`out/sector-fund-flow.mp4`（1080×1920，H.264，yuv420p，公共 BGM + faststart）。
-封面固定 **JPG**：用独立 `SectorFundFlowCover` 海报（**不是**成片冻帧），以及抖音双封面 `out/cover-竖3x4.jpg`、`out/cover-横4x3.jpg`。
+封面固定 **JPG**：
+- `out/cover.jpg` — 9:16 海报（桌面预览）
+- `out/cover-竖3x4.jpg` — **抖音 Feed 实际显示**（Remotion 直出 3:4，与海报同组件）
+- `out/cover-横4x3.jpg` — 横封面（完整海报 letterbox，不再裁掉流入/流出卡）
+
+> 不一致常见原因：看了 9:16 主图，但抖音列表用的是竖 3:4；或旧脚本按冻帧 `y=380` 裁横图把底部裁掉。
 
 渲染链路：Remotion `--muted` → `remux_previewable.sh` → `mix_bgm.sh`（`assets/bgm.wav`）。
 音乐短于视频则循环，长于视频则裁到成片时长；默认 `loudnorm` 对齐响度。

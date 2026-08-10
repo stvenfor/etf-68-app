@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "active_id": "zhibei-official-clone",
+  "items": [
+    {
+      "id": "zhibei-official-clone",
+      "name": "网站策略克隆（log_trend/四池）",
+      "readonly": true,
+      "approx": false,
+      "updated_at": "2026-08-10T15:35:38+08:00",
+      "config": {
+        "etf_pool": [
+          "159915",
+          "513100",
+          "512890",
+          "518880"
+        ],
+        "etf_names": {
+          "159915": "创业板ETF",
+          "513100": "纳指ETF",
+          "512890": "红利低波ETF",
+          "518880": "黄金ETF"
+        },
+        "momentum": {
+          "method": "slope",
+          "window": 25,
+          "secondary_enabled": false,
+          "secondary_method": "simple",
+          "secondary_window": 20,
+          "secondary_min": 0.0
+        },
+        "selection": {
+          "score_min": null,
+          "score_max": null,
+          "top_n": 1,
+          "equal_weight": false
+        },
+        "holding": {
+          "min_hold_days": 1,
+          "day_count_type": "trading",
+          "fallback_code": null
+        },
+        "take_profit": {
+          "enabled": false,
+          "threshold": 0.18,
+          "cooldown_days": 8
+        },
+        "stop_loss": {
+          "enabled": false,
+          "pct_enabled": false,
+          "pct_threshold": 0.08,
+          "drawdown_enabled": false,
+          "drawdown_threshold": 0.12,
+          "cooldown_days": 3
+        },
+        "extreme_filter": {
+          "skip_limit_up": false,
+          "skip_limit_down": false
+        },
+        "condition_filter": {
+          "price_above_ma": false,
+          "ma_period": 20,
+          "ma_bull": false,
+          "ma_fast": 20,
+          "ma_slow": 60
+        },
+        "market_timing": {
+          "enabled": false,
+          "benchmark_code": "510300"
+        },
+        "costs": {
+          "commission_rate": 0.0002,
+          "slippage_rate": 0.001
+        },
+        "backtest": {
+          "initial_nav": 1000.0,
+          "start_date": "2025-01-01",
+          "end_date": "2026-08-07"
+        },
+        "approx_label": "网站策略克隆",
+        "source": "zhibei",
+        "zhibei": {
+          "scoring_method": "log_trend",
+          "rebalance_frequency": "daily",
+          "execution_time": "10:00:00",
+          "template_id": "classic",
+          "signal_interval": "daily",
+          "defensive_enabled": false,
+          "note": "日K收盘近似；网站 execution_time 盘中价本地无法精确还原"
+        }
+      }
+    },
+    {
+      "id": "xiaoxin-public-approx",
+      "name": "ETF轮动实盘（本地近似·四池）",
+      "readonly": true,
+      "approx": true,
+      "updated_at": "2026-08-10T15:35:38+08:00",
+      "config": {
+        "etf_pool": [
+          "513100",
+          "159915",
+          "510300",
+          "518880"
+        ],
+        "etf_names": {
+          "513100": "纳指ETF",
+          "159915": "创业板ETF",
+          "510300": "沪深300ETF",
+          "518880": "黄金ETF"
+        },
+        "momentum": {
+          "method": "slope",
+          "window": 20,
+          "secondary_enabled": false,
+          "secondary_method": "simple",
+          "secondary_window": 60,
+          "secondary_min": 0.0
+        },
+        "selection": {
+          "score_min": null,
+          "score_max": null,
+          "top_n": 1,
+          "equal_weight": false
+        },
+        "holding": {
+          "min_hold_days": 8,
+          "day_count_type": "trading",
+          "fallback_code": null
+        },
+        "take_profit": {
+          "enabled": false,
+          "threshold": 0.18,
+          "cooldown_days": 8
+        },
+        "stop_loss": {
+          "enabled": false,
+          "pct_enabled": true,
+          "pct_threshold": 0.08,
+          "drawdown_enabled": false,
+          "drawdown_threshold": 0.05,
+          "cooldown_days": 0
+        },
+        "extreme_filter": {
+          "skip_limit_up": false,
+          "skip_limit_down": false
+        },
+        "condition_filter": {
+          "price_above_ma": false,
+          "ma_period": 60,
+          "ma_bull": false,
+          "ma_fast": 20,
+          "ma_slow": 60
+        },
+        "market_timing": {
+          "enabled": false,
+          "benchmark_code": "510300"
+        },
+        "costs": {
+          "commission_rate": 0.0001,
+          "slippage_rate": 0.0005
+        },
+        "backtest": {
+          "initial_nav": 1000.0,
+          "start_date": "2024-11-11",
+          "end_date": null
+        },
+        "approx_label": "本地近似",
+        "source": "local"
+      }
+    }
+  ]
+}

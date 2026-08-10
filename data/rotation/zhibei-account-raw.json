@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "id": "514c372c-0d6e-4b30-810d-774a0c7418ae",
+      "name": "我的策略",
+      "config": {
+        "strategy_type": "rotation",
+        "codes": [
+          "159915.XSHE",
+          "513100.XSHG",
+          "512890.XSHG",
+          "518880.XSHG"
+        ],
+        "benchmark_code": "510300.XSHG",
+        "start": "2025-01-01",
+        "end": "2026-08-07",
+        "momentum_days": 25,
+        "hold_count": 1,
+        "scoring_method": "log_trend",
+        "rebalance_frequency": "daily",
+        "execution_time": "10:00:00",
+        "slippage_rate": 0.001,
+        "commission_rate": 0.0002,
+        "defensive_enabled": false,
+        "timing": {
+          "absolute_momentum_enabled": false,
+          "ma_filter_enabled": false,
+          "breadth_filter_enabled": false
+        },
+        "risk_control": {
+          "crash_protection_enabled": false,
+          "portfolio_drawdown_enabled": false
+        },
+        "signal_interval": "daily"
+      },
+      "versions": [
+        {
+          "version_number": 1,
+          "run_count": 0,
+          "name": "我的策略 v1"
+        },
+        {
+          "version_number": 2,
+          "run_count": 1,
+          "name": "我的策略 v2",
+          "id": "5e2a69bc-1e3b-405d-a0a2-b24ac31038b3"
+        }
+      ],
+      "updated_at": "2026-08-10T07:33:32.238618+00:00",
+      "simulation": null
+    }
+  ]
+}

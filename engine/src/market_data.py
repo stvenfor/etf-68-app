@@ -672,10 +672,14 @@ def common_bar_window(
 class PublicMarketDataProvider:
     """Default public endpoint adapter with injectable I/O and non-market inputs."""
 
+    # ~2y trading days: covers rotation backtests from 2025-01-01 (+ momentum warmup).
+    # Previous hard-coded 280 truncated local curves to ~2025-06 and skewed Mode B compare.
+    DEFAULT_DAILY_BAR_LIMIT = 520
+
     EASTMONEY_QUOTE = "https://push2.eastmoney.com/api/qt/stock/get?secid={secid}&fields=f43,f44,f45,f46,f47,f48,f60,f169,f170"
-    EASTMONEY_BARS = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&end=20500101&lmt=280&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+    EASTMONEY_BARS = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&end=20500101&lmt={limit}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
     # Direct web.ifzq is often WAF-blocked; QQ finance proxy returns the same JSON shape.
-    TENCENT_BARS = "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={symbol},day,,,280,qfq"
+    TENCENT_BARS = "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={symbol},day,,,{limit},qfq"
     TENCENT_QUOTE = "https://qt.gtimg.cn/q={symbol}"
 
     def __init__(
@@ -686,12 +690,14 @@ class PublicMarketDataProvider:
         benchmark_codes: Optional[Mapping[str, str]] = None,
         opener: Callable[..., Any] = urlopen,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        daily_bar_limit: int | None = None,
     ) -> None:
         self.calendar_provider = calendar_provider
         self.catalyst_provider = catalyst_provider
         self.benchmark_codes = dict(benchmark_codes or {})
         self.opener = opener
         self.clock = clock
+        self.daily_bar_limit = int(daily_bar_limit or self.DEFAULT_DAILY_BAR_LIMIT)
 
     def get_current_quotes(self, code: str) -> Sequence[Quote]:
         fetched_at = self.clock()
@@ -703,16 +709,19 @@ class PublicMarketDataProvider:
         )
         return [east, tencent]
 
-    def get_daily_bars(self, code: str) -> Sequence[DailyBar]:
+    def get_daily_bars(self, code: str, *, limit: int | None = None) -> Sequence[DailyBar]:
         fetched_at = self.clock()
+        bar_limit = max(1, int(limit if limit is not None else self.daily_bar_limit))
         # Prefer QQ/Tencent proxy first: Eastmoney history host often drops connections.
         try:
             payload = self._json(
-                self.TENCENT_BARS.format(symbol=_tencent_symbol(code))
+                self.TENCENT_BARS.format(symbol=_tencent_symbol(code), limit=bar_limit)
             )
             return parse_tencent_bars(payload, code, fetched_at)
         except MarketDataError:
-            payload = self._json(self.EASTMONEY_BARS.format(secid=_secid(code)))
+            payload = self._json(
+                self.EASTMONEY_BARS.format(secid=_secid(code), limit=bar_limit)
+            )
             return parse_eastmoney_bars(payload, fetched_at)
 
     def get_aum(self, code: str) -> TimedMetric:

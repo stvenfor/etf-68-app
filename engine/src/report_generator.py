@@ -202,6 +202,9 @@ def build_report(
                 ),
             }
         )
+        panorama = build_panorama(bars=bars, points=code_points)
+        row["panoramaSeries"] = panorama["series"]
+        row["panoramaSummary"] = panorama["summary"]
         row.update({k: v for k, v in weekly_fields.items() if k != "trend"})
         row["trend"] = trend
         row.pop("flow_status", None)
@@ -348,6 +351,92 @@ def _latest_share(
 ) -> SharePoint | None:
     matching = [point for point in points if point.date == latest_date]
     return matching[0] if len(matching) == 1 else None
+
+
+def build_panorama(
+    *,
+    bars: Sequence[DailyBar],
+    points: Sequence[SharePoint],
+    lookback: int = 120,
+) -> dict[str, Any]:
+    """Align bars + shares into UI panorama series (亿元 / 亿份) and summary cards."""
+    if not bars:
+        return {"series": [], "summary": _empty_panorama_summary()}
+
+    window = list(bars[-lookback:]) if lookback > 0 else list(bars)
+    by_date: dict[date, SharePoint] = {}
+    for point in points:
+        if math.isfinite(point.shares) and point.shares >= 0:
+            by_date[point.date] = point
+
+    series: list[dict[str, Any]] = []
+    prev_shares: float | None = None
+    for bar in window:
+        point = by_date.get(bar.date)
+        shares = float(point.shares) if point is not None else None
+        net_flow_yi: float | None = None
+        if shares is not None and prev_shares is not None:
+            net_flow_yi = round((shares - prev_shares) * bar.close / 1e8, 4)
+        if shares is not None:
+            prev_shares = shares
+        amount_yi = (
+            round(float(bar.turnover_cny) / 1e8, 4)
+            if math.isfinite(bar.turnover_cny)
+            else None
+        )
+        series.append(
+            {
+                "date": bar.date.isoformat(),
+                "netFlowYi": net_flow_yi,
+                "amountYi": amount_yi,
+                "sharesYi": round(shares / 1e8, 4) if shares is not None else None,
+                "close": round(float(bar.close), 4) if math.isfinite(bar.close) else None,
+            }
+        )
+
+    return {"series": series, "summary": _panorama_summary(series)}
+
+
+def _empty_panorama_summary() -> dict[str, Any]:
+    return {
+        "avgNetFlowYi": None,
+        "avgAmountYi": None,
+        "sumNetFlowYi": None,
+        "flow3Yi": None,
+        "flow5Yi": None,
+        "flow10Yi": None,
+    }
+
+
+def _sum_last_n_flows(flows: Sequence[float], n: int) -> float | None:
+    """Sum the last N daily net-flow points (亿元); None if sample shorter than N."""
+    if n <= 0 or len(flows) < n:
+        return None
+    return round(sum(flows[-n:]), 4)
+
+
+def _panorama_summary(series: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    flows = [
+        float(item["netFlowYi"])
+        for item in series
+        if item.get("netFlowYi") is not None and math.isfinite(float(item["netFlowYi"]))
+    ]
+    amounts = [
+        float(item["amountYi"])
+        for item in series
+        if item.get("amountYi") is not None and math.isfinite(float(item["amountYi"]))
+    ]
+    avg_flow = round(fmean(flows), 4) if flows else None
+    avg_amount = round(fmean(amounts), 4) if amounts else None
+    sum_flow = round(sum(flows), 4) if flows else None
+    return {
+        "avgNetFlowYi": avg_flow,
+        "avgAmountYi": avg_amount,
+        "sumNetFlowYi": sum_flow,
+        "flow3Yi": _sum_last_n_flows(flows, 3),
+        "flow5Yi": _sum_last_n_flows(flows, 5),
+        "flow10Yi": _sum_last_n_flows(flows, 10),
+    }
 
 
 def _resolve_weekly_fields(

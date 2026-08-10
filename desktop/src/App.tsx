@@ -21,10 +21,13 @@ import {
 } from "./filters";
 import DashboardBoard from "./dashboard/DashboardBoard";
 import EventMatrixPanel from "./EventMatrixPanel";
+import EtfPanoramaModal from "./EtfPanoramaModal";
+import EtfAiAnalysisModal from "./EtfAiAnalysisModal";
 import FundsTop30Panel from "./FundsTop30Panel";
-import HoldingsPanel from "./HoldingsPanel";
+import FinanceResearchPanel from "./finance/FinanceResearchPanel";
+import EtfRotationPanel from "./rotation/EtfRotationPanel";
 import { buildDailyNarration } from "./narration";
-import type { UiBundle } from "./types";
+import type { EtfRow, UiBundle } from "./types";
 
 /** Shanghai session: denser poll; off-hours slower. */
 function boardPollMs(now = new Date()): number {
@@ -104,6 +107,8 @@ export default function App() {
   const [impactSector, setImpactSector] = useState("全部");
   const [impactSide, setImpactSide] = useState("全部");
   const [citicMonth, setCiticMonth] = useState<number | "全部">("全部");
+  const [selectedEtf, setSelectedEtf] = useState<EtfRow | null>(null);
+  const [analysisEtf, setAnalysisEtf] = useState<EtfRow | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakGenRef = useRef(0);
   const boardRefreshBusy = useRef(false);
@@ -329,7 +334,7 @@ export default function App() {
         </button>
       </header>
 
-      {tab !== "board" && tab !== "funds30" && tab !== "holdings" && (
+      {tab !== "board" && tab !== "funds30" && tab !== "rotation" && tab !== "finance" && (
         <section className="stats">
           <div className="stat">
             <div className="label">状态</div>
@@ -378,9 +383,10 @@ export default function App() {
 
       <main className="main">
         {tab === "funds30" && <FundsTop30Panel />}
-        {tab === "holdings" && <HoldingsPanel />}
+        {tab === "rotation" && <EtfRotationPanel />}
+        {tab === "finance" && <FinanceResearchPanel />}
 
-        {tab !== "funds30" && tab !== "holdings" && !bundle && (
+        {tab !== "funds30" && tab !== "rotation" && tab !== "finance" && !bundle && (
           <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>
         )}
 
@@ -811,7 +817,12 @@ export default function App() {
                 </thead>
                 <tbody>
                   {filtered.map((r) => (
-                    <tr key={r.code}>
+                    <tr
+                      key={r.code}
+                      className="clickable-row"
+                      onClick={() => setSelectedEtf(r)}
+                      title="查看份额趋势 / ETF 数据全景"
+                    >
                       <td>
                         <span className={`pill ${actionTone(r.action)}`}>{r.action}</span>
                       </td>
@@ -844,7 +855,25 @@ export default function App() {
                         </span>
                       </td>
                       <td>{r.code}</td>
-                      <td>{r.name}</td>
+                      <td>
+                        <div className="etf-name-cell">
+                          <span className="etf-name-text">{r.name}</span>
+                          <button
+                            type="button"
+                            className="etf-ai-help"
+                            title="查看 AI 分析说明"
+                            aria-label={`${r.name} AI 分析说明`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAnalysisEtf(r);
+                            }}
+                          >
+                            <span className="etf-ai-help-mark" aria-hidden>
+                              ?
+                            </span>
+                          </button>
+                        </div>
+                      </td>
                       <td>{r.sector}</td>
                       <td>{r.trend}</td>
                       <td className={pctClass(r.ret30Hold)}>{fmtPct(r.ret30Hold)}</td>
@@ -871,6 +900,16 @@ export default function App() {
           </div>
         )}
       </main>
+      {selectedEtf && (
+        <EtfPanoramaModal row={selectedEtf} onClose={() => setSelectedEtf(null)} />
+      )}
+      {analysisEtf && (
+        <EtfAiAnalysisModal
+          row={analysisEtf}
+          dataDate={bundle?.dataDate}
+          onClose={() => setAnalysisEtf(null)}
+        />
+      )}
     </div>
   );
 }

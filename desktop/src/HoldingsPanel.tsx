@@ -84,6 +84,16 @@ function formatEstimateTime(v?: string | null): string {
 const ADVICE_FILTERS = ["继续持有", "减仓观察"] as const;
 type AdviceFilter = (typeof ADVICE_FILTERS)[number];
 
+const COMPACT_STORAGE_KEY = "etf68.holdings.compact";
+
+function readCompactPref(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function formatMixPct(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
   return `${fmtNum(v, 1)}%`;
@@ -146,9 +156,22 @@ export default function HoldingsPanel() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showAdviceHelp, setShowAdviceHelp] = useState(false);
   const [adviceFilter, setAdviceFilter] = useState<AdviceFilter>("继续持有");
+  const [compact, setCompact] = useState(readCompactPref);
 
   const toggleGroup = (key: string) => {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleCompact = () => {
+    setCompact((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COMPACT_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   };
 
   const load = useCallback(async () => {
@@ -208,19 +231,31 @@ export default function HoldingsPanel() {
     : "";
 
   return (
-    <div className="panel funds30-panel holdings-panel">
+    <div className={`panel funds30-panel holdings-panel${compact ? " is-compact" : ""}`}>
       <div className="holdings-hero">
         <div className="holdings-hero-text">
           <h2>我的持仓</h2>
           <p className="holdings-hero-sub">
             个人场外开放式归档（不含货币 / 同业存单 / ETF联接）
             {countsHint ? ` · ${countsHint}` : ""}
+            {compact ? " · 简版" : ""}
           </p>
           <p className="holdings-hero-meta">{status}</p>
         </div>
-        <button className="btn primary" disabled={busy} onClick={() => refresh()}>
-          {busy ? "刷新中…" : "刷新净值"}
-        </button>
+        <div className="holdings-hero-actions">
+          <button
+            type="button"
+            className={`btn holdings-view-toggle${compact ? " is-active" : ""}`}
+            aria-pressed={compact}
+            onClick={toggleCompact}
+            title={compact ? "切换为完整视图" : "切换为简版：名称/建议/标签 + 净值三项"}
+          >
+            {compact ? "完整" : "简版"}
+          </button>
+          <button className="btn primary" disabled={busy} onClick={() => refresh()}>
+            {busy ? "刷新中…" : "刷新净值"}
+          </button>
+        </div>
       </div>
 
       <div className="holdings-advice-switch" role="tablist" aria-label="仓位建议筛选">
@@ -247,67 +282,71 @@ export default function HoldingsPanel() {
         当前查看：{adviceFilter} · {filteredRows.length} 只
       </p>
 
-      <div className="funds30-advice-box holdings-help-box">
-        <button
-          type="button"
-          className="funds30-advice-toggle"
-          aria-expanded={showAdviceHelp}
-          onClick={() => setShowAdviceHelp((v) => !v)}
-        >
-          <span className="funds30-chevron" aria-hidden>
-            {showAdviceHelp ? "▾" : "▸"}
-          </span>
-          仓位建议规则与阈值
-        </button>
-        {showAdviceHelp ? (
-          <div className="funds30-advice-body">
-            <p>
-              {bundle?.adviceFramework?.rule ||
-                "按类别波动门槛，结合公布涨跌、盘中估值与溢折价，给出持仓侧观察标签。"}
-              <strong> 不构成投资建议或收益承诺。</strong>
-            </p>
-            <ul className="funds30-advice-list">
-              {ADVICE_HELP.map((item) => (
-                <li key={item.label}>
-                  <span className={`pill ${adviceTone(item.label)}`}>{item.label}</span>
-                  <span>
-                    {item.meaning}；风险：{item.risk}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="holdings-threshold-table-wrap">
-              <table className="holdings-threshold-table">
-                <thead>
-                  <tr>
-                    <th>类别</th>
-                    <th>过热→减仓</th>
-                    <th>回落→可加仓</th>
-                    <th>溢价→减仓</th>
-                    <th>折价→可加仓</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {THRESHOLD_HELP.map((t) => (
-                    <tr key={t.cat}>
-                      <td>{t.cat}</td>
-                      <td className="mono">{t.overheat}</td>
-                      <td className="mono">{t.soft}</td>
-                      <td className="mono">{t.prem}</td>
-                      <td className="mono">{t.disc}</td>
+      {!compact ? (
+        <div className="funds30-advice-box holdings-help-box">
+          <button
+            type="button"
+            className="funds30-advice-toggle"
+            aria-expanded={showAdviceHelp}
+            onClick={() => setShowAdviceHelp((v) => !v)}
+          >
+            <span className="funds30-chevron" aria-hidden>
+              {showAdviceHelp ? "▾" : "▸"}
+            </span>
+            仓位建议规则与阈值
+          </button>
+          {showAdviceHelp ? (
+            <div className="funds30-advice-body">
+              <p>
+                {bundle?.adviceFramework?.rule ||
+                  "按类别波动门槛，结合公布涨跌、盘中估值与溢折价，给出持仓侧观察标签。"}
+                <strong> 不构成投资建议或收益承诺。</strong>
+              </p>
+              <ul className="funds30-advice-list">
+                {ADVICE_HELP.map((item) => (
+                  <li key={item.label}>
+                    <span className={`pill ${adviceTone(item.label)}`}>{item.label}</span>
+                    <span>
+                      {item.meaning}；风险：{item.risk}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="holdings-threshold-table-wrap">
+                <table className="holdings-threshold-table">
+                  <thead>
+                    <tr>
+                      <th>类别</th>
+                      <th>过热→减仓</th>
+                      <th>回落→可加仓</th>
+                      <th>溢价→减仓</th>
+                      <th>折价→可加仓</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {THRESHOLD_HELP.map((t) => (
+                      <tr key={t.cat}>
+                        <td>{t.cat}</td>
+                        <td className="mono">{t.overheat}</td>
+                        <td className="mono">{t.soft}</td>
+                        <td className="mono">{t.prem}</td>
+                        <td className="mono">{t.disc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="funds30-advice-risks">
+                {(bundle?.adviceFramework?.risks || []).join("；")}
+              </p>
             </div>
-            <p className="funds30-advice-risks">
-              {(bundle?.adviceFramework?.risks || []).join("；")}
-            </p>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
 
-      {bundle?.excludedNote ? <p className="holdings-excluded-note">{bundle.excludedNote}</p> : null}
+      {!compact && bundle?.excludedNote ? (
+        <p className="holdings-excluded-note">{bundle.excludedNote}</p>
+      ) : null}
 
       {!bundle?.rows?.length ? (
         <div className="empty">暂无持仓数据。可联网点「刷新净值」生成。</div>
@@ -364,69 +403,75 @@ export default function HoldingsPanel() {
                         ))}
                       </div>
 
-                      {r.riskNote ? <p className="holdings-risk-note">{r.riskNote}</p> : null}
+                      {!compact && r.riskNote ? <p className="holdings-risk-note">{r.riskNote}</p> : null}
 
-                      <div className="holdings-profile">
-                        <div className="holdings-profile-row">
-                          <span className="holdings-profile-label">资产配置</span>
-                          <span className="holdings-profile-value">
-                            {assetMixLine(r)}
-                            {r.assetMix?.asOf ? (
-                              <span className="holdings-profile-asof mono"> · {r.assetMix.asOf}</span>
-                            ) : null}
-                          </span>
-                        </div>
-                        <div className="holdings-profile-row">
-                          <span className="holdings-profile-label">行业占比</span>
-                          {(r.industries || []).length > 0 ? (
-                            <div className="holdings-industries">
-                              {(r.industries || []).map((ind) => (
-                                <span key={ind.name} className="holdings-industry">
-                                  <span className="holdings-industry-name">{ind.name}</span>
-                                  <span className="holdings-industry-pct mono">{fmtNum(ind.weightPct, 1)}%</span>
-                                  <span
-                                    className="holdings-industry-bar"
-                                    style={{ width: `${Math.min(100, Math.max(4, ind.weightPct))}%` }}
-                                    aria-hidden
-                                  />
-                                </span>
-                              ))}
-                              {r.industryAsOf ? (
-                                <span className="holdings-profile-asof mono">截至 {r.industryAsOf}</span>
+                      {!compact ? (
+                        <div className="holdings-profile">
+                          <div className="holdings-profile-row">
+                            <span className="holdings-profile-label">资产配置</span>
+                            <span className="holdings-profile-value">
+                              {assetMixLine(r)}
+                              {r.assetMix?.asOf ? (
+                                <span className="holdings-profile-asof mono"> · {r.assetMix.asOf}</span>
                               ) : null}
-                            </div>
-                          ) : (
-                            <span className="holdings-profile-value muted">—</span>
-                          )}
+                            </span>
+                          </div>
+                          <div className="holdings-profile-row">
+                            <span className="holdings-profile-label">行业占比</span>
+                            {(r.industries || []).length > 0 ? (
+                              <div className="holdings-industries">
+                                {(r.industries || []).map((ind) => (
+                                  <span key={ind.name} className="holdings-industry">
+                                    <span className="holdings-industry-name">{ind.name}</span>
+                                    <span className="holdings-industry-pct mono">{fmtNum(ind.weightPct, 1)}%</span>
+                                    <span
+                                      className="holdings-industry-bar"
+                                      style={{ width: `${Math.min(100, Math.max(4, ind.weightPct))}%` }}
+                                      aria-hidden
+                                    />
+                                  </span>
+                                ))}
+                                {r.industryAsOf ? (
+                                  <span className="holdings-profile-asof mono">截至 {r.industryAsOf}</span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="holdings-profile-value muted">—</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
 
-                      {(r.adviceDetail || r.adviceRisk || r.styleNote) && (
+                      {!compact && (r.adviceDetail || r.adviceRisk || r.styleNote) ? (
                         <div className="holdings-card-explain">
                           {r.adviceDetail ? <p className="holdings-advice-why">{r.adviceDetail}</p> : null}
                           {r.adviceRisk ? <p className="holdings-advice-risk">风险：{r.adviceRisk}</p> : null}
                           {r.styleNote ? <p className="holdings-card-style">{r.styleNote}</p> : null}
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="holdings-metrics">
                         <div className="holdings-metric">
-                          <span className="holdings-metric-label">单位净值</span>
+                          <span className="holdings-metric-label">{compact ? "当日净值" : "单位净值"}</span>
                           <span className="holdings-metric-value mono">{fmtNum(r.nav ?? null, 4)}</span>
                           <span className={`holdings-metric-sub ${toneClass(r.dayChangePct)}`}>
                             {fmtPct(r.dayChangePct ?? null, 2)}
                           </span>
-                          <span className="holdings-metric-foot mono">{r.navDate || "—"}</span>
+                          {!compact ? (
+                            <span className="holdings-metric-foot mono">{r.navDate || "—"}</span>
+                          ) : null}
                         </div>
                         <div className="holdings-metric holdings-metric-est">
-                          <span className="holdings-metric-label">实时估值</span>
+                          <span className="holdings-metric-label">{compact ? "估值" : "实时估值"}</span>
                           <span className="holdings-metric-value mono">{fmtNum(r.estimateNav ?? null, 4)}</span>
                           <span className={`holdings-metric-sub ${toneClass(r.estimateChangePct)}`}>
                             {fmtPct(r.estimateChangePct ?? null, 2)}
                           </span>
-                          <span className="holdings-metric-foot mono" title={r.estimateTime || undefined}>
-                            {formatEstimateTime(r.estimateTime)}
-                          </span>
+                          {!compact ? (
+                            <span className="holdings-metric-foot mono" title={r.estimateTime || undefined}>
+                              {formatEstimateTime(r.estimateTime)}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="holdings-metric holdings-metric-err">
                           <span className="holdings-metric-label">估值误差</span>
@@ -440,7 +485,9 @@ export default function HoldingsPanel() {
                           <span className={`holdings-metric-sub ${toneClass(errAbs)}`}>
                             {errAbs == null ? "—" : `${errAbs >= 0 ? "+" : ""}${fmtNum(errAbs, 4)}`}
                           </span>
-                          <span className="holdings-metric-foot">{estimateErrorFoot(r)}</span>
+                          {!compact ? (
+                            <span className="holdings-metric-foot">{estimateErrorFoot(r)}</span>
+                          ) : null}
                         </div>
                       </div>
                     </article>

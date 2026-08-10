@@ -51,7 +51,12 @@ cp -f out/cover-竖3x4.jpg "$HOME/Desktop/板块资金流向-${DATE}-封面-竖3
 cp -f out/cover-横4x3.jpg "$HOME/Desktop/板块资金流向-${DATE}-封面-横4x3.jpg"
 ```
 
-**硬性**：封面一律 JPG；`cover` 脚本已用 `--image-format=jpeg` + `export_cover_variants.sh`（sips JFIF）。
+**硬性**：封面一律 JPG；`cover` 脚本：
+1. 渲染 `SectorFundFlowCover`（9:16 海报）→ `out/cover.jpg`
+2. 渲染 `SectorFundFlowCoverPortrait`（3:4 海报，与 Feed 一致）→ `out/cover-竖3x4-render.jpg`
+3. `export_cover_variants.sh`：竖封面用 Remotion 3:4 成图；横封面对 9:16 **letterbox（补边）**，**禁止**旧版冻帧枢纽裁切 `crop=…:380`
+
+抖音 Feed 显示的是 **竖 3:4**，不是桌面上看的完整 9:16；两者构图须一致（同一海报组件）。
 
 ### 3. 抖音发布
 
@@ -96,10 +101,10 @@ node publish-video.mjs /tmp/etf68-douyin/video-fundflow.json
 
 ## 视觉约定（改动画面时）
 
-- 细线：连续实线（禁止 dash 流动）；小珠约当前尺寸；端点细线间隔 `spread * 8.5`。
+- 细线：连续三次贝塞尔实线（禁止 dash、禁止折线亮段）；更密；流动=沿曲线平滑移动的小珠彗星尾（端点淡入淡出，忌闪烁）。
 - 中央蓄水池：圆形 SVG hub，清晰可读。
-- 封面：独立 `SectorFundFlowCover` 海报构图（交易日大字 + TOP 流入/流出 + 成交额），**禁止**用成片冻帧当封面。
-- 水印：`小哈的一天快乐`；涨红跌绿 / 流入红流出绿。
+- 封面：独立 `SectorFundFlowCover` 海报；抖音竖槽用同款 `SectorFundFlowCoverPortrait`（1080×1440）。横槽 letterbox 完整海报，禁止冻帧式中心裁切。
+- 水印/免责：封面内嵌「数据来源于网络…」；涨红跌绿 / 流入红流出绿。
 
 ## 合集
 
