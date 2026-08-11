@@ -7,6 +7,33 @@ const GREEN = '#9AFFB5';
 const RED = '#ff4d4d';
 const GRAY = '#b8b8b8';
 const WATERMARK = '小哈的一天快乐';
+/** Encouraging lines under the hub — each ≤10 Chinese characters. */
+const HUB_ENCOURAGE: readonly string[] = [
+  '慢慢来会更好',
+  '稳住就有光',
+  '今日亦值得',
+  '保持耐心',
+  '相信长期',
+  '静待花开',
+  '步履不停',
+  '心安即是福',
+  '时间会说话',
+  '微笑向前走',
+  '专注当下',
+  '蓄力再出发',
+  '好运在路上',
+  '别急会晴的',
+  '温柔且坚定',
+];
+
+function pickEncourage(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return HUB_ENCOURAGE[h % HUB_ENCOURAGE.length]!;
+}
+
 const {
   sideMargin,
   safeTop,
@@ -560,10 +587,11 @@ const EndpointBar: React.FC<{side: 'left' | 'right'; color: string}> = ({
   );
 };
 
-const Reservoir: React.FC<{stanceYi: number; progress: number}> = ({
-  stanceYi,
-  progress,
-}) => {
+const Reservoir: React.FC<{
+  stanceYi: number;
+  progress: number;
+  tradeDate: string;
+}> = ({stanceYi, progress, tradeDate}) => {
   const remotionFrame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const isEntry = stanceYi < 0;
@@ -578,6 +606,16 @@ const Reservoir: React.FC<{stanceYi: number; progress: number}> = ({
   const cx = pool.rx;
   const cy = pool.ry;
   const r = pool.rx - 2;
+  // Deterministic “random” pick from trade date (stable across renders).
+  const encourage = useMemo(() => pickEncourage(tradeDate || 'hub'), [tradeDate]);
+  const encourageOpacity = interpolate(remotionFrame, [12, 28], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  const spin = t * 48;
+  const counterSpin = -t * 28;
+  const arcSweep = 110 + pulse * 40;
 
   return (
     <div
@@ -586,18 +624,22 @@ const Reservoir: React.FC<{stanceYi: number; progress: number}> = ({
         left: pool.x - pool.rx,
         top: pool.y - pool.ry,
         width: size,
-        height: size,
+        height: size + 110,
         zIndex: 3,
       }}
     >
-      {/* Soft ambient glow — restrained */}
+      {/* Ambient energy bloom */}
       <div
         style={{
           position: 'absolute',
-          inset: -28,
+          inset: -42,
           borderRadius: '50%',
-          background: `radial-gradient(circle at 50% 50%, rgba(${glowRgb},${0.18 + pulse * 0.08}) 0%, transparent 68%)`,
-          filter: 'blur(6px)',
+          background: `
+            radial-gradient(circle at 50% 40%, rgba(${glowRgb},${0.28 + pulse * 0.12}) 0%, transparent 55%),
+            radial-gradient(circle at 30% 70%, rgba(80,160,255,0.12) 0%, transparent 50%),
+            radial-gradient(circle at 70% 65%, rgba(${glowRgb},0.1) 0%, transparent 45%)
+          `,
+          filter: 'blur(10px)',
         }}
       />
 
@@ -608,141 +650,329 @@ const Reservoir: React.FC<{stanceYi: number; progress: number}> = ({
         style={{position: 'absolute', inset: 0, overflow: 'visible'}}
       >
         <defs>
-          <radialGradient id="hub-fill" cx="38%" cy="30%" r="72%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-            <stop offset="42%" stopColor="rgba(28,40,62,0.96)" />
-            <stop offset="100%" stopColor="rgba(6,8,14,1)" />
+          <radialGradient id="hub-fill" cx="34%" cy="26%" r="78%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.32)" />
+            <stop offset="22%" stopColor="rgba(55,72,105,0.98)" />
+            <stop offset="55%" stopColor="rgba(12,16,26,1)" />
+            <stop offset="100%" stopColor="rgba(2,3,6,1)" />
           </radialGradient>
-          <radialGradient id="hub-core" cx="50%" cy="45%" r="60%">
-            <stop offset="0%" stopColor={`rgba(${glowRgb},0.28)`} />
-            <stop offset="55%" stopColor="rgba(12,16,26,0.92)" />
-            <stop offset="100%" stopColor="rgba(4,6,10,1)" />
+          <radialGradient id="hub-core" cx="50%" cy="40%" r="65%">
+            <stop offset="0%" stopColor={`rgba(${glowRgb},0.5)`} />
+            <stop offset="35%" stopColor="rgba(8,12,20,0.95)" />
+            <stop offset="100%" stopColor="rgba(2,3,7,1)" />
           </radialGradient>
           <linearGradient id="hub-rim" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="rgba(230,240,255,0.85)" />
-            <stop offset="45%" stopColor={`rgba(${glowRgb},0.75)`} />
-            <stop offset="100%" stopColor="rgba(120,150,190,0.55)" />
+            <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
+            <stop offset="28%" stopColor={`rgba(${glowRgb},1)`} />
+            <stop offset="55%" stopColor="rgba(160,200,255,0.7)" />
+            <stop offset="100%" stopColor="rgba(40,55,80,0.85)" />
           </linearGradient>
+          <linearGradient id="hub-blade" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={`rgba(${glowRgb},0.55)`} />
+            <stop offset="50%" stopColor="rgba(180,210,255,0.18)" />
+            <stop offset="100%" stopColor={`rgba(${glowRgb},0.08)`} />
+          </linearGradient>
+          <linearGradient id="hub-energy" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={`rgba(${glowRgb},0)`} />
+            <stop offset="40%" stopColor={`rgba(${glowRgb},0.85)`} />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.95)" />
+          </linearGradient>
+          <filter id="hub-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        {/* Outer tick ring — rotates with timeline */}
-        <g transform={`rotate(${orbit} ${cx} ${cy})`}>
-          {Array.from({length: 24}).map((_, i) => {
-            const a = (i / 24) * Math.PI * 2;
-            const r0 = r + 10;
-            const r1 = r + (i % 6 === 0 ? 18 : 14);
+        {/* Outer gear teeth — counter-spin */}
+        <g transform={`rotate(${counterSpin} ${cx} ${cy})`}>
+          {Array.from({length: 48}).map((_, i) => {
+            const a = (i / 48) * Math.PI * 2;
+            const major = i % 4 === 0;
+            const r0 = r + 7;
+            const r1 = r + (major ? 22 : 12);
             return (
               <line
-                key={`tick-${i}`}
+                key={`gear-${i}`}
                 x1={cx + Math.cos(a) * r0}
                 y1={cy + Math.sin(a) * r0}
                 x2={cx + Math.cos(a) * r1}
                 y2={cy + Math.sin(a) * r1}
                 stroke={
-                  i % 6 === 0
-                    ? `rgba(${glowRgb},0.75)`
-                    : 'rgba(180,200,230,0.35)'
+                  major
+                    ? `rgba(${glowRgb},${0.75 + pulse * 0.2})`
+                    : 'rgba(160,190,230,0.32)'
                 }
-                strokeWidth={i % 6 === 0 ? 2 : 1}
+                strokeWidth={major ? 2.6 : 1.1}
                 strokeLinecap="round"
               />
             );
           })}
-          {/* Sweep tip */}
+        </g>
+
+        {/* Timeline orbit + bead */}
+        <g transform={`rotate(${orbit} ${cx} ${cy})`}>
           <circle
-            cx={cx + Math.cos(0) * (r + 16)}
-            cy={cy + Math.sin(0) * (r + 16)}
-            r={3.2}
+            cx={cx}
+            cy={cy}
+            r={r + 16}
+            fill="none"
+            stroke={`rgba(${glowRgb},0.35)`}
+            strokeWidth={1.5}
+            strokeDasharray="6 8"
+          />
+          <circle
+            cx={cx + r + 16}
+            cy={cy}
+            r={4.2}
             fill={`rgb(${glowRgb})`}
+            filter="url(#hub-glow)"
             opacity={0.95}
           />
         </g>
 
-        {/* Thin orbit guide */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r + 12}
-          fill="none"
-          stroke="rgba(170,195,230,0.28)"
-          strokeWidth={1}
-        />
+        {/* Dashed counter ring */}
+        <g transform={`rotate(${spin * 0.6} ${cx} ${cy})`}>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r + 10}
+            fill="none"
+            stroke="rgba(200,220,255,0.28)"
+            strokeWidth={1.2}
+            strokeDasharray="2 6"
+          />
+        </g>
 
         {/* Main disc */}
         <circle cx={cx} cy={cy} r={r} fill="url(#hub-fill)" />
+
+        {/* Turbine blades — spinning */}
+        <g transform={`rotate(${spin} ${cx} ${cy})`} opacity={0.9}>
+          {Array.from({length: 8}).map((_, i) => {
+            const a = (i / 8) * Math.PI * 2;
+            const x1 = cx + Math.cos(a) * (r * 0.22);
+            const y1 = cy + Math.sin(a) * (r * 0.22);
+            const x2 = cx + Math.cos(a) * (r * 0.78);
+            const y2 = cy + Math.sin(a) * (r * 0.78);
+            const px = -Math.sin(a) * 7;
+            const py = Math.cos(a) * 7;
+            return (
+              <path
+                key={`blade-${i}`}
+                d={`M ${x1 + px} ${y1 + py} L ${x2} ${y2} L ${x1 - px} ${y1 - py} Z`}
+                fill="url(#hub-blade)"
+                stroke={`rgba(${glowRgb},0.35)`}
+                strokeWidth={0.6}
+              />
+            );
+          })}
+        </g>
+
+        {/* Energy sweep arc */}
+        <g transform={`rotate(${spin * 1.4} ${cx} ${cy})`} filter="url(#hub-glow)">
+          <path
+            d={(() => {
+              const rr = r - 4;
+              const a0 = -arcSweep / 2;
+              const a1 = arcSweep / 2;
+              const rad = (d: number) => (d * Math.PI) / 180;
+              const x0 = cx + Math.cos(rad(a0)) * rr;
+              const y0 = cy + Math.sin(rad(a0)) * rr;
+              const x1 = cx + Math.cos(rad(a1)) * rr;
+              const y1 = cy + Math.sin(rad(a1)) * rr;
+              return `M ${x0} ${y0} A ${rr} ${rr} 0 0 1 ${x1} ${y1}`;
+            })()}
+            fill="none"
+            stroke="url(#hub-energy)"
+            strokeWidth={3.2}
+            strokeLinecap="round"
+            opacity={0.85}
+          />
+        </g>
+
+        {/* Core plate */}
         <circle
           cx={cx}
           cy={cy}
-          r={r - 10}
+          r={r - 12}
           fill="url(#hub-core)"
-          stroke={`rgba(${glowRgb},0.35)`}
+          stroke={`rgba(${glowRgb},0.45)`}
+          strokeWidth={1.4}
+        />
+
+        {/* Hexagon core motif */}
+        <g opacity={0.55 + pulse * 0.2}>
+          {(() => {
+            const hr = r * 0.38;
+            const pts = Array.from({length: 6})
+              .map((_, i) => {
+                const a = (i / 6) * Math.PI * 2 - Math.PI / 2 + (spin * Math.PI) / 180 * 0.15;
+                return `${cx + Math.cos(a) * hr},${cy + Math.sin(a) * hr}`;
+              })
+              .join(' ');
+            return (
+              <polygon
+                points={pts}
+                fill="none"
+                stroke={`rgba(${glowRgb},0.65)`}
+                strokeWidth={1.6}
+              />
+            );
+          })()}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r * 0.16}
+            fill={`rgba(${glowRgb},0.15)`}
+            stroke={`rgba(${glowRgb},0.7)`}
+            strokeWidth={1.5}
+          />
+        </g>
+
+        {/* Inner tech rings */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r - 26}
+          fill="none"
+          stroke="rgba(255,255,255,0.1)"
           strokeWidth={1}
         />
-        {/* Chrome rim */}
+        <g transform={`rotate(${-spin} ${cx} ${cy})`}>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r - 38}
+            fill="none"
+            stroke={`rgba(${glowRgb},0.22)`}
+            strokeWidth={1.2}
+            strokeDasharray="3 5"
+          />
+        </g>
+
+        {/* Chrome rim stack */}
         <circle
           cx={cx}
           cy={cy}
-          r={r - 1.5}
+          r={r - 0.5}
           fill="none"
           stroke="url(#hub-rim)"
-          strokeWidth={3}
+          strokeWidth={4}
+          filter="url(#hub-glow)"
         />
         <circle
           cx={cx}
           cy={cy}
           r={r - 5}
           fill="none"
-          stroke="rgba(255,255,255,0.14)"
-          strokeWidth={1}
+          stroke="rgba(255,255,255,0.22)"
+          strokeWidth={1.3}
         />
-        {/* Top specular arc */}
-        <path
-          d={`M ${cx - r * 0.62} ${cy - r * 0.42} Q ${cx} ${cy - r * 0.78} ${cx + r * 0.55} ${cy - r * 0.38}`}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r - 7.5}
           fill="none"
-          stroke="rgba(255,255,255,0.55)"
-          strokeWidth={2.2}
-          strokeLinecap="round"
-          opacity={0.75}
+          stroke="rgba(0,0,0,0.5)"
+          strokeWidth={1.2}
         />
+
+        {/* Specular highlights */}
+        <path
+          d={`M ${cx - r * 0.66} ${cy - r * 0.38} Q ${cx} ${cy - r * 0.86} ${cx + r * 0.6} ${cy - r * 0.34}`}
+          fill="none"
+          stroke="rgba(255,255,255,0.78)"
+          strokeWidth={2.6}
+          strokeLinecap="round"
+          opacity={0.85}
+        />
+        <path
+          d={`M ${cx - r * 0.52} ${cy + r * 0.56} Q ${cx} ${cy + r * 0.74} ${cx + r * 0.5} ${cy + r * 0.54}`}
+          fill="none"
+          stroke={`rgba(${glowRgb},0.45)`}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          opacity={0.7}
+        />
+
+        {/* Orbit sparks */}
+        {Array.from({length: 6}).map((_, i) => {
+          const a = ((i / 6) * Math.PI * 2 + (spin * Math.PI) / 180) % (Math.PI * 2);
+          const rr = r + 16;
+          return (
+            <circle
+              key={`spark-${i}`}
+              cx={cx + Math.cos(a) * rr}
+              cy={cy + Math.sin(a) * rr}
+              r={i % 2 === 0 ? 2.2 : 1.4}
+              fill={i % 2 === 0 ? `rgb(${glowRgb})` : 'rgba(220,235,255,0.9)'}
+              opacity={0.55 + pulse * 0.35}
+            />
+          );
+        })}
       </svg>
 
-      {/* Typography stack — clean hierarchy */}
+      {/* Typography stack */}
       <div
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: size,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
+          gap: 5,
           zIndex: 2,
           pointerEvents: 'none',
         }}
       >
         <div
           style={{
-            color: 'rgba(230,238,250,0.92)',
-            fontSize: 15,
-            fontWeight: 700,
-            letterSpacing: 6,
-            textTransform: 'none',
-            textShadow: '0 1px 8px rgba(0,0,0,0.8)',
+            fontFamily:
+              '"Xingkai SC", "STXingkai", "Kaiti SC", "STKaiti", "Songti SC", "Noto Serif SC", serif',
+            fontSize: 26,
+            fontWeight: 400,
+            letterSpacing: 10,
+            lineHeight: 1.05,
+            backgroundImage: `linear-gradient(180deg, #fff8e8 0%, rgba(255,246,220,0.95) 38%, rgba(${glowRgb},0.95) 100%)`,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            WebkitTextStroke: '0.4px rgba(255,255,255,0.35)',
+            filter: `
+              drop-shadow(0 0 10px rgba(${glowRgb},0.65))
+              drop-shadow(0 2px 6px rgba(0,0,0,0.9))
+            `,
           }}
         >
-          蓄水池
+          转运轮
         </div>
         <div
           style={{
-            padding: '3px 12px',
+            width: 44,
+            height: 1.5,
+            background: `linear-gradient(90deg, transparent, rgba(${glowRgb},0.95), rgba(255,255,255,0.7), rgba(${glowRgb},0.95), transparent)`,
+            boxShadow: `0 0 8px rgba(${glowRgb},0.5)`,
+            marginBottom: 1,
+          }}
+        />
+        <div
+          style={{
+            padding: '4px 14px',
             borderRadius: 999,
-            border: `1px solid rgba(${glowRgb},0.55)`,
-            background: 'rgba(0,0,0,0.35)',
+            border: `1px solid rgba(${glowRgb},0.7)`,
+            background: `linear-gradient(180deg, rgba(${glowRgb},0.22), rgba(0,0,0,0.5))`,
             color: amountColor,
             fontSize: 13,
             fontWeight: 800,
-            letterSpacing: 2,
-            boxShadow: `0 0 12px rgba(${glowRgb},0.25)`,
+            letterSpacing: 2.5,
+            boxShadow: `0 0 16px rgba(${glowRgb},0.35), inset 0 1px 0 rgba(255,255,255,0.15)`,
           }}
         >
           {label}
@@ -750,15 +980,51 @@ const Reservoir: React.FC<{stanceYi: number; progress: number}> = ({
         <div
           style={{
             color: amountColor,
-            fontSize: 28,
+            fontSize: 29,
             fontWeight: 800,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: 0.5,
             lineHeight: 1,
-            textShadow: `0 2px 10px rgba(0,0,0,0.85), 0 0 14px rgba(${glowRgb},0.35)`,
+            textShadow: `0 2px 12px rgba(0,0,0,0.9), 0 0 20px rgba(${glowRgb},0.5)`,
           }}
         >
           {formatYi(amount)}
+        </div>
+      </div>
+
+      {/* Encouraging line — 50px lower than previous */}
+      <div
+        style={{
+          position: 'absolute',
+          left: -28,
+          right: -28,
+          top: size + 62,
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          opacity: encourageOpacity,
+          transform: `translateY(${(1 - encourageOpacity) * 8}px)`,
+        }}
+      >
+        <div
+          style={{
+            fontFamily:
+              '"Kaiti SC", "STKaiti", "Songti SC", "Noto Serif SC", "PingFang SC", serif',
+            fontSize: 21,
+            fontWeight: 600,
+            letterSpacing: 5,
+            lineHeight: 1.15,
+            whiteSpace: 'nowrap',
+            color: 'rgba(255,246,228,0.96)',
+            textShadow: `
+              0 0 1px rgba(255,255,255,0.35),
+              0 1px 0 rgba(0,0,0,0.65),
+              0 2px 12px rgba(0,0,0,0.75),
+              0 0 16px rgba(${glowRgb},0.45)
+            `,
+          }}
+        >
+          {encourage}
         </div>
       </div>
     </div>
@@ -932,7 +1198,7 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
           }}
         >
           <span>
-            <span style={{color: GRAY}}>●</span> 蓄水池中转（灰）
+            <span style={{color: GRAY}}>●</span> 转运轮中转（灰）
           </span>
           <span>
             <span style={{color: GREEN}}>●</span> 资金流出（浅绿）
@@ -988,7 +1254,11 @@ export const SectorFundFlowIntraday: React.FC<CompositionProps> = ({data}) => {
         </div>
 
         <ParticleFlow frameData={current} progress={progress} />
-        <Reservoir stanceYi={marketStanceYi(current)} progress={progress} />
+        <Reservoir
+          stanceYi={marketStanceYi(current)}
+          progress={progress}
+          tradeDate={data.tradeDate}
+        />
 
         {/* Crowns always visible */}
         <div

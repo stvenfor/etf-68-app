@@ -4,9 +4,9 @@ import type {FlowFrame} from '../data/schema';
 
 /**
  * Layout contract (px):
- * - Multi-strand bundles: clear gap between lines inside each 线束
+ * - Sparse multi-strand bundles (few lines, wide gaps) — not dense ribbons
+ * - Mid-path bloom + list-mapped hub landings (anti-needle)
  * - No micro-jitter, no blurred ribbon underlay
- * - Horizontal-tangent cubics; weight-sized hub slots
  */
 export const FLOW_LAYOUT = {
   canvasW: 1080,
@@ -41,6 +41,8 @@ type StrandDef = {
   c2: Point;
   kind: PathKind;
   weight: number;
+  /** 0 = center strand, 1 = outermost — for stroke taper. */
+  edge: number;
 };
 
 function bezier(p0: Point, p1: Point, p2: Point, p3: Point, t: number): Point {
@@ -83,70 +85,76 @@ function edgeFade(t: number): number {
   return 1;
 }
 
-/** How much of each row the whole 线束 spans. */
-const BUNDLE_SPAN = 0.72;
-/**
- * Gap between adjacent lines inside one 线束 (px at list end).
- * Larger = clearer 线与线间距.
- */
-const STRAND_GAP = 2.5;
+/** Fraction of each list row the 线束 occupies. */
+const BUNDLE_SPAN = 0.92;
+/** Target gap between adjacent strands at the list end (px). */
+const STRAND_GAP = 4.5;
+/** Cap strand count — denser bundles. */
+const MAX_STRANDS = 14;
+/** Mid-path fan multiplier vs list half-span ( >1 = bloom in the middle ). */
+const MID_FAN_MUL = 1.45;
+/** Keep this fraction of list strand spacing at the hub (anti-needle). */
+const HUB_SPREAD_KEEP = 0.38;
 
 function bundleSpec(rowH: number): {lines: number; step: number; halfSpan: number} {
   const span = rowH * BUNDLE_SPAN;
-  const lines = Math.max(2, Math.floor(span / STRAND_GAP) + 1);
+  const lines = Math.min(MAX_STRANDS, Math.max(10, Math.floor(span / STRAND_GAP) + 1));
   const step = span / Math.max(1, lines - 1);
   return {lines, step, halfSpan: span / 2};
 }
 
-function rimShares(weights: number[]): {starts: number[]; spans: number[]} {
-  const raw = weights.map((w) => Math.sqrt(Math.max(0.4, w)));
-  const sum = raw.reduce((a, b) => a + b, 0) || 1;
-  const spans = raw.map((r) => r / sum);
-  const starts: number[] = [];
-  let acc = 0;
-  for (const s of spans) {
-    starts.push(acc);
-    acc += s;
-  }
-  return {starts, spans};
+function strandNorm(li: number, lines: number): number {
+  if (lines <= 1) return 0;
+  return li / (lines - 1) - 0.5; // -0.5 … +0.5
 }
 
-function rimPoint(
+function onPoolRim(
   pool: {x: number; y: number; rx: number; ry: number},
   side: 'left' | 'right',
-  shareStart: number,
-  shareSpan: number,
-  li: number,
-  lines: number
+  y: number
 ): Point {
-  const rimTop = pool.y - pool.ry * 0.86;
-  const rimBot = pool.y + pool.ry * 0.86;
-  const h = rimBot - rimTop;
-  const slot0 = rimTop + shareStart * h;
-  const slotH = shareSpan * h;
-  // Same relative spacing as list: span BUNDLE_SPAN of the slot, step evenly
-  const used = slotH * BUNDLE_SPAN;
-  const pad = (slotH - used) / 2;
-  const y =
-    lines <= 1 ? slot0 + slotH / 2 : slot0 + pad + (li / (lines - 1)) * used;
-  const uy = Math.max(-0.93, Math.min(0.93, (y - pool.y) / pool.ry));
-  const ux = Math.sqrt(Math.max(0.05, 1 - uy * uy));
+  const uy = Math.max(-0.95, Math.min(0.95, (y - pool.y) / pool.ry));
+  const ux = Math.sqrt(Math.max(0.04, 1 - uy * uy));
   return {
-    x: pool.x + (side === 'left' ? -1 : 1) * ux * pool.rx * 0.92,
-    y: pool.y + uy * pool.ry * 0.92,
+    x: pool.x + (side === 'left' ? -1 : 1) * ux * pool.rx * 0.96,
+    y: pool.y + uy * pool.ry * 0.96,
   };
+}
+
+/** Map a list Y into the hub rim band, preserving rank order. */
+function mapToRimY(
+  listY: number,
+  listMin: number,
+  listMax: number,
+  pool: {y: number; ry: number}
+): number {
+  const rimTop = pool.y - pool.ry * 0.9;
+  const rimBot = pool.y + pool.ry * 0.9;
+  const t = (listY - listMin) / Math.max(1, listMax - listMin);
+  return rimTop + (0.06 + t * 0.88) * (rimBot - rimTop);
 }
 
 function edgeControls(
   a: Point,
   b: Point,
-  side: 'left' | 'right'
+  side: 'left' | 'right',
+  li: number,
+  lines: number,
+  halfSpan: number,
+  seed: number
 ): {c1: Point; c2: Point} {
   const dx = b.x - a.x;
-  const k = side === 'left' ? 0.5 : 0.58;
+  const n = strandNorm(li, lines);
+  const jitter = (hash01(seed + li * 17) - 0.5) * 7;
+  const fan = n * halfSpan * MID_FAN_MUL * 2;
+  const k1 = (side === 'left' ? 0.3 : 0.34) + Math.abs(n) * 0.06;
+  const k2 = (side === 'left' ? 0.7 : 0.74) - Math.abs(n) * 0.05;
+  const y1 = a.y + (b.y - a.y) * 0.2 + fan + jitter;
+  // Hold fan longer toward hub so strands don’t collapse into a needle tip early
+  const y2 = a.y + (b.y - a.y) * 0.7 + fan * 0.55 + jitter * 0.3;
   return {
-    c1: {x: a.x + dx * k, y: a.y},
-    c2: {x: b.x - dx * (1 - k), y: b.y},
+    c1: {x: a.x + dx * k1, y: y1},
+    c2: {x: a.x + dx * k2, y: y2},
   };
 }
 
@@ -156,9 +164,14 @@ function makeStrand(
   kind: PathKind,
   id: string,
   weight: number,
-  side: 'left' | 'right'
+  side: 'left' | 'right',
+  li: number,
+  lines: number,
+  halfSpan: number,
+  seed: number
 ): StrandDef {
-  const {c1, c2} = edgeControls(listPt, hubPt, side);
+  const {c1, c2} = edgeControls(listPt, hubPt, side, li, lines, halfSpan, seed);
+  const edge = Math.min(1, Math.abs(strandNorm(li, lines)) * 2);
   if (kind === 'toPool') {
     return {
       id,
@@ -169,6 +182,7 @@ function makeStrand(
       c2,
       kind,
       weight,
+      edge,
     };
   }
   return {
@@ -180,6 +194,7 @@ function makeStrand(
     c2: c1,
     kind,
     weight,
+    edge,
   };
 }
 
@@ -188,36 +203,42 @@ function pushBundle(args: {
   side: 'left' | 'right';
   kind: PathKind;
   idPrefix: string;
-  shareStart: number;
-  shareSpan: number;
   baseY: number;
+  listMin: number;
+  listMax: number;
   anchorX: number;
   weight: number;
   lines: number;
   step: number;
   halfSpan: number;
   pool: {x: number; y: number; rx: number; ry: number};
+  seed: number;
 }): void {
   const {
     paths,
     side,
     kind,
     idPrefix,
-    shareStart,
-    shareSpan,
     baseY,
+    listMin,
+    listMax,
     anchorX,
     weight,
     lines,
     step,
     halfSpan,
     pool,
+    seed,
   } = args;
+
+  const coreHubY = mapToRimY(baseY, listMin, listMax, pool);
 
   for (let li = 0; li < lines; li++) {
     const spread = -halfSpan + li * step;
-    const listPt: Point = {x: anchorX, y: baseY + spread};
-    const hubPt = rimPoint(pool, side, shareStart, shareSpan, li, lines);
+    const xNudge = strandNorm(li, lines) * (side === 'left' ? 6 : -6);
+    const listPt: Point = {x: anchorX + xNudge, y: baseY + spread};
+    const hubY = coreHubY + spread * HUB_SPREAD_KEEP;
+    const hubPt = onPoolRim(pool, side, hubY);
     paths.push(
       makeStrand(
         listPt,
@@ -225,7 +246,11 @@ function pushBundle(args: {
         kind,
         `${idPrefix}-L${li}`,
         weight / lines,
-        side
+        side,
+        li,
+        lines,
+        halfSpan,
+        seed
       )
     );
   }
@@ -238,8 +263,12 @@ function buildPaths(frame: FlowFrame): StrandDef[] {
 
   const outW = frame.outflowTop.map((s) => Math.max(0.2, s.netYi));
   const inW = frame.inflowTop.map((s) => Math.max(0.2, s.netYi));
-  const outShare = rimShares(outW);
-  const inShare = rimShares(inW);
+  const outN = frame.outflowTop.length;
+  const inN = frame.inflowTop.length;
+  const outMin = listTop + rowH / 2;
+  const outMax = listTop + (outN - 0.5) * rowH;
+  const inMin = listTop + rowH / 2;
+  const inMax = listTop + (inN - 0.5) * rowH;
 
   frame.outflowTop.forEach((src, si) => {
     pushBundle({
@@ -247,15 +276,16 @@ function buildPaths(frame: FlowFrame): StrandDef[] {
       side: 'left',
       kind: 'toPool',
       idPrefix: `to-pool-${src.code}`,
-      shareStart: outShare.starts[si],
-      shareSpan: outShare.spans[si],
       baseY: listTop + si * rowH + rowH / 2,
+      listMin: outMin,
+      listMax: outMax,
       anchorX: leftAnchorX,
       weight: outW[si],
       lines,
       step,
       halfSpan,
       pool,
+      seed: si * 131 + 7,
     });
   });
 
@@ -265,15 +295,16 @@ function buildPaths(frame: FlowFrame): StrandDef[] {
       side: 'right',
       kind: 'fromPool',
       idPrefix: `from-pool-${dst.code}`,
-      shareStart: inShare.starts[di],
-      shareSpan: inShare.spans[di],
       baseY: listTop + di * rowH + rowH / 2,
+      listMin: inMin,
+      listMax: inMax,
       anchorX: rightAnchorX,
       weight: inW[di],
       lines,
       step,
       halfSpan,
       pool,
+      seed: di * 97 + 41,
     });
   });
 
@@ -308,7 +339,7 @@ export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = 
       opacity: number;
     }> = [];
 
-    // One bead per sector (mid strand) — far fewer moving dots
+    // Two beads per sector (doubled) on mid ±1 strands; speed doubled vs prior.
     const bySector = new Map<string, StrandDef[]>();
     for (const path of paths) {
       const key = path.id.replace(/-L\d+$/, '');
@@ -318,19 +349,24 @@ export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = 
     }
     let si = 0;
     for (const [sectorKey, arr] of bySector) {
-      const path = arr[Math.floor((arr.length - 1) / 2)];
-      const r0 = hash01(si * 97 + 13);
-      const speed = 0.02 + r0 * 0.01;
-      const t = (r0 * 0.55 + tBase * speed * 60) % 1;
-      const pt = bezier(path.from, path.c1, path.c2, path.to, t);
-      result.push({
-        key: `${sectorKey}-bead`,
-        x: pt.x,
-        y: pt.y,
-        r: 1.25,
-        color: particleColor(path.kind, t),
-        opacity: 0.78 * edgeFade(t),
-      });
+      const mid = Math.floor((arr.length - 1) / 2);
+      const strandIdx = [mid, Math.min(arr.length - 1, mid + 1)];
+      for (let bi = 0; bi < 2; bi++) {
+        const path = arr[strandIdx[bi]!]!;
+        const r0 = hash01(si * 97 + 13 + bi * 31);
+        const speed = (0.02 + r0 * 0.01) * 2;
+        const phase = r0 * 0.55 + bi * 0.5;
+        const t = (phase + tBase * speed * 60) % 1;
+        const pt = bezier(path.from, path.c1, path.c2, path.to, t);
+        result.push({
+          key: `${sectorKey}-bead-${bi}`,
+          x: pt.x,
+          y: pt.y,
+          r: 1.35,
+          color: particleColor(path.kind, t),
+          opacity: 0.82 * edgeFade(t),
+        });
+      }
       si += 1;
     }
     return result;
@@ -343,20 +379,23 @@ export const ParticleFlow: React.FC<{frameData: FlowFrame; progress: number}> = 
       viewBox={`0 0 ${width} ${height}`}
       style={{position: 'absolute', left: 0, top: 0, width, height, pointerEvents: 'none'}}
     >
-      {paths.map((path) => (
-        <path
-          key={path.id}
-          d={path.d}
-          fill="none"
-          stroke={
-            path.kind === 'toPool'
-              ? 'rgba(55,185,105,0.7)'
-              : 'rgba(215,55,55,0.7)'
-          }
-          strokeWidth={0.28}
-          strokeLinecap="round"
-        />
-      ))}
+      {paths.map((path) => {
+        const a = 0.82 - path.edge * 0.22;
+        const stroke =
+          path.kind === 'toPool'
+            ? `rgba(55,185,105,${a.toFixed(3)})`
+            : `rgba(215,55,55,${a.toFixed(3)})`;
+        return (
+          <path
+            key={path.id}
+            d={path.d}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={0.55 - path.edge * 0.16}
+            strokeLinecap="round"
+          />
+        );
+      })}
       {dots.map((dot) => (
         <circle
           key={dot.key}
