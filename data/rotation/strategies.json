@@ -7,7 +7,7 @@
       "name": "网站策略克隆（log_trend/四池）",
       "readonly": true,
       "approx": false,
-      "updated_at": "2026-08-10T15:35:38+08:00",
+      "updated_at": "2026-08-11T17:23:28+08:00",
       "config": {
         "etf_pool": [
           "159915",
@@ -51,7 +51,7 @@
           "pct_threshold": 0.08,
           "drawdown_enabled": false,
           "drawdown_threshold": 0.12,
-          "cooldown_days": 3
+          "cooldown_days": 0
         },
         "extreme_filter": {
           "skip_limit_up": false,
@@ -95,7 +95,7 @@
       "name": "ETF轮动实盘（本地近似·四池）",
       "readonly": true,
       "approx": true,
-      "updated_at": "2026-08-10T15:35:38+08:00",
+      "updated_at": "2026-08-11T17:23:28+08:00",
       "config": {
         "etf_pool": [
           "513100",
