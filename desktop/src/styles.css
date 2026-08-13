@@ -2545,9 +2545,174 @@ tr.clickable-row:hover {
   color: var(--text);
 }
 
+.panorama-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 8px 4px;
+}
+
+.panorama-chart-head h3 {
+  margin: 0;
+}
+
+.panorama-chart-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.panorama-range-badge {
+  flex-shrink: 0;
+  min-width: min(300px, 100%);
+  max-width: 360px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #1a222d;
+  display: grid;
+  gap: 4px;
+}
+
+.panorama-range-badge.up {
+  border-color: color-mix(in srgb, var(--up) 35%, var(--border));
+  background: color-mix(in srgb, var(--up) 8%, #1a222d);
+}
+
+.panorama-range-badge.down {
+  border-color: color-mix(in srgb, var(--down) 35%, var(--border));
+  background: color-mix(in srgb, var(--down) 8%, #1a222d);
+}
+
+.panorama-range-badge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.panorama-range-badge-label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.panorama-range-badge-dates {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.panorama-range-badge-days {
+  opacity: 0.85;
+}
+
+.panorama-range-badge-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panorama-range-badge-pct {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.panorama-range-badge.up .panorama-range-badge-pct {
+  color: var(--up);
+}
+
+.panorama-range-badge.down .panorama-range-badge-pct {
+  color: var(--down);
+}
+
+.panorama-range-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.panorama-range-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panorama-range-metric-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.panorama-range-metric-value {
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.panorama-range-metric-value.up {
+  color: var(--up);
+}
+
+.panorama-range-metric-value.down {
+  color: var(--down);
+}
+
+.panorama-range-metric-value.warn {
+  color: #e6b450;
+}
+
+.panorama-range-metric-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.panorama-range-badge-note {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.panorama-range-reset {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.panorama-range-reset:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
 @media (max-width: 720px) {
   .panorama-cards {
     grid-template-columns: 1fr;
+  }
+
+  .panorama-chart-head {
+    flex-direction: column;
+  }
+
+  .panorama-range-badge {
+    max-width: none;
+    width: 100%;
   }
 }
 

@@ -1,11 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactECharts from "echarts-for-react";
+import type { ECharts } from "echarts";
 import type { EtfRow } from "./types";
 import {
-  amountLineOption,
+  calcCloseInterval,
   dailyCloseOption,
-  netFlowBarOption,
+  fullCloseInterval,
+  netFlowAmountOption,
+  resolveBrushCategoryIndices,
   sharesPriceOption,
+  type CloseIntervalStats,
+  type CloseRangeSelection,
 } from "./dashboard/etfPanoramaOptions";
 
 type Props = {
@@ -17,6 +22,40 @@ function fmtYi(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(digits)}`;
+}
+
+function fmtPct(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  const sign = v > 0 ? "+" : "";
+  return `${sign}${v.toFixed(2)}%`;
+}
+
+function fmtDrawdownPct(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  if (v <= 0) return "0.00%";
+  return `-${v.toFixed(2)}%`;
+}
+
+function recoveryLabel(stats: CloseIntervalStats): string {
+  switch (stats.recoveryStatus) {
+    case "none":
+      return "无回撤";
+    case "recovered":
+      return stats.recoveryDays != null
+        ? `已修复 · ${stats.recoveryDays} 个交易日`
+        : "已修复";
+    case "recovering": {
+      const prog =
+        stats.recoveryProgressPct != null
+          ? ` · 已回补 ${stats.recoveryProgressPct.toFixed(0)}%`
+          : "";
+      return `修复中${prog}`;
+    }
+    case "unrecovered":
+      return "未修复";
+    default:
+      return "—";
+  }
 }
 
 function sumLastNFlows(
@@ -47,11 +86,36 @@ function resolveFlowWindows(row: EtfRow) {
   };
 }
 
+function activateLineXBrush(chart: ECharts) {
+  chart.dispatchAction({
+    type: "takeGlobalCursor",
+    key: "brush",
+    brushOption: { brushType: "lineX" },
+  });
+}
+
+function clearBrushAreas(chart: ECharts) {
+  chart.dispatchAction({ type: "brush", command: "clear", areas: [] });
+}
+
 export default function EtfPanoramaModal({ row, onClose }: Props) {
   const series = row.panoramaSeries ?? [];
   const summary = row.panoramaSummary;
   const flowWindows = resolveFlowWindows(row);
   const hasSeries = series.length > 0;
+  const closeChartRef = useRef<ReactECharts | null>(null);
+  const [closeRange, setCloseRange] = useState<CloseRangeSelection | null>(null);
+
+  const fullInterval = useMemo(() => fullCloseInterval(series), [series]);
+  const selectedInterval = useMemo(
+    () =>
+      closeRange
+        ? calcCloseInterval(series, closeRange.startIdx, closeRange.endIdx)
+        : null,
+    [series, closeRange]
+  );
+  const activeInterval = selectedInterval ?? fullInterval;
+  const isCustomRange = selectedInterval != null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -60,6 +124,57 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    setCloseRange(null);
+  }, [row.code]);
+
+  const dailyOption = useMemo(
+    () => dailyCloseOption(series, { range: closeRange }),
+    [series, closeRange]
+  );
+
+  useEffect(() => {
+    const chart = closeChartRef.current?.getEchartsInstance();
+    if (!chart) return;
+    // Option remount clears brush mode; keep lineX ready for the next drag.
+    const t = window.setTimeout(() => activateLineXBrush(chart), 0);
+    return () => window.clearTimeout(t);
+  }, [dailyOption]);
+
+  const onCloseChartReady = (chart: ECharts) => {
+    activateLineXBrush(chart);
+  };
+
+  const onBrushEnd = (params: { areas?: Array<{ brushType?: string; coordRange?: unknown }> }) => {
+    const area = params?.areas?.find((a) => a.brushType === "lineX");
+    if (!area) return;
+    const next = resolveBrushCategoryIndices(series, area.coordRange);
+    const chart = closeChartRef.current?.getEchartsInstance();
+    if (!next || next.endIdx <= next.startIdx) {
+      setCloseRange(null);
+      if (chart) {
+        clearBrushAreas(chart);
+        activateLineXBrush(chart);
+      }
+      return;
+    }
+    setCloseRange(next);
+    if (chart) {
+      // Persist highlight via markArea; drop transient brush overlay.
+      clearBrushAreas(chart);
+      activateLineXBrush(chart);
+    }
+  };
+
+  const resetCloseRange = () => {
+    setCloseRange(null);
+    const chart = closeChartRef.current?.getEchartsInstance();
+    if (chart) {
+      clearBrushAreas(chart);
+      activateLineXBrush(chart);
+    }
+  };
 
   return (
     <div className="panorama-overlay" onClick={onClose} role="presentation">
@@ -77,7 +192,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
               {row.code} {row.name}
             </h2>
             <p className="panorama-sub">
-              {row.sector} · 日线走势 / 份额趋势 / 净申赎 / 成交额
+              {row.sector} · 日线走势 / 净申赎·成交额 / 份额趋势
             </p>
           </div>
           <button type="button" className="btn" onClick={onClose}>
@@ -139,32 +254,105 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
             </div>
 
             <section className="panorama-chart-block">
-              <h3>日线走势（收盘价）</h3>
+              <div className="panorama-chart-head">
+                <div>
+                  <h3>日线走势（收盘价）</h3>
+                  <p className="panorama-chart-hint">
+                    横向拖拽框选区间查看涨跌幅、最大回撤与修复状态
+                  </p>
+                </div>
+                {activeInterval && (
+                  <div
+                    className={`panorama-range-badge ${
+                      activeInterval.changePct >= 0 ? "up" : "down"
+                    }`}
+                  >
+                    <div className="panorama-range-badge-meta">
+                      <span className="panorama-range-badge-label">
+                        {isCustomRange ? "已选区间" : "全区间"}
+                      </span>
+                      <span className="panorama-range-badge-dates">
+                        {activeInterval.startDate} → {activeInterval.endDate}
+                        <span className="panorama-range-badge-days">
+                          · {activeInterval.tradingDays} 个交易日
+                        </span>
+                      </span>
+                    </div>
+                    <div className="panorama-range-badge-main">
+                      <span className="panorama-range-badge-pct">
+                        {fmtPct(activeInterval.changePct)}
+                      </span>
+                    </div>
+                    <div className="panorama-range-metrics">
+                      <div className="panorama-range-metric">
+                        <span className="panorama-range-metric-label">最大回撤</span>
+                        <span className="panorama-range-metric-value down">
+                          {fmtDrawdownPct(activeInterval.maxDrawdownPct)}
+                          {activeInterval.maxDrawdownPct > 0.05 && (
+                            <span className="panorama-range-metric-sub">
+                              {" "}
+                              · 经过{" "}
+                              {activeInterval.troughIdx - activeInterval.peakIdx}{" "}
+                              个交易日
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="panorama-range-metric">
+                        <span className="panorama-range-metric-label">回撤修复</span>
+                        <span
+                          className={`panorama-range-metric-value ${
+                            activeInterval.recoveryStatus === "recovered"
+                              ? "up"
+                              : activeInterval.recoveryStatus === "recovering"
+                                ? "warn"
+                                : activeInterval.recoveryStatus === "unrecovered"
+                                  ? "down"
+                                  : ""
+                          }`}
+                        >
+                          {recoveryLabel(activeInterval)}
+                        </span>
+                      </div>
+                    </div>
+                    {activeInterval.maxDrawdownPct > 0.05 && (
+                      <div className="panorama-range-badge-note">
+                        高点 {activeInterval.peakDate} → 低点{" "}
+                        {activeInterval.troughDate}
+                        {activeInterval.recoveryDate
+                          ? ` → 修复 ${activeInterval.recoveryDate}`
+                          : ""}
+                      </div>
+                    )}
+                    {isCustomRange && (
+                      <button
+                        type="button"
+                        className="panorama-range-reset"
+                        onClick={resetCloseRange}
+                      >
+                        重置全区间
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <ReactECharts
-                option={dailyCloseOption(series)}
-                style={{ height: 240 }}
+                ref={closeChartRef}
+                option={dailyOption}
+                style={{ height: 260 }}
                 opts={{ renderer: "canvas" }}
                 notMerge
                 lazyUpdate
+                onChartReady={onCloseChartReady}
+                onEvents={{ brushEnd: onBrushEnd }}
               />
             </section>
 
             <section className="panorama-chart-block">
-              <h3>净申赎金额（亿元）</h3>
+              <h3>净申赎 / 成交额（亿元）</h3>
               <ReactECharts
-                option={netFlowBarOption(series)}
-                style={{ height: 220 }}
-                opts={{ renderer: "canvas" }}
-                notMerge
-                lazyUpdate
-              />
-            </section>
-
-            <section className="panorama-chart-block">
-              <h3>成交额（亿元）</h3>
-              <ReactECharts
-                option={amountLineOption(series)}
-                style={{ height: 200 }}
+                option={netFlowAmountOption(series)}
+                style={{ height: 260 }}
                 opts={{ renderer: "canvas" }}
                 notMerge
                 lazyUpdate
