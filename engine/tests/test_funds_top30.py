@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from src.funds_top30 import (
     FORCE_EXCLUDE,
     FORCE_INCLUDE,
+    PURE_BOND_PIN_CODES,
     QUOTA,
     approx_aum_yi,
     build_funds_top30,
@@ -77,11 +78,17 @@ class FundsTop30HelpersTest(unittest.TestCase):
         raw = [
             _sina_row("110022", "易方达消费行业股票", 9e9, 2.8),
             _sina_row("014855", "嘉实中证半导体指数增强发起式C", 1e8, 3.0),
+            _sina_row("014193", "汇添富中证芯片产业指数增强发起式A", 2e8, 2.0),
+            _sina_row("020899", "天弘中证全指通信设备指数发起A", 1.5e8, 3.0),
+            _sina_row("020256", "中欧中证机器人指数发起C", 1.2e8, 1.4),
         ]
         picked = select_category_top(raw, "equity", QUOTA["equity"])
         codes = [r["code"] for r in picked]
-        self.assertEqual(codes, list(FORCE_INCLUDE["equity"]))
-        self.assertNotIn("110022", codes)
+        # Tech pins first, then AUM fill toward quota.
+        self.assertEqual(codes[:4], list(FORCE_INCLUDE["equity"]))
+        self.assertIn("110022", codes)
+        self.assertGreaterEqual(len(picked), 5)
+        self.assertLessEqual(len(picked), QUOTA["equity"])
 
     def test_select_allows_shortfall_under_quota(self) -> None:
         raw = [
@@ -156,6 +163,14 @@ class FundsTop30BuildTest(unittest.TestCase):
                 ("019004", "测试混合补位4A", 3.6e9),
                 ("019005", "测试混合补位5A", 3.5e9),
                 ("019006", "测试混合补位6A", 3.4e9),
+                ("019007", "测试混合补位7A", 3.3e9),
+                ("019008", "测试混合补位8A", 3.2e9),
+                ("019009", "测试混合补位9A", 3.1e9),
+                ("019010", "测试混合补位10A", 3.0e9),
+                ("019011", "测试混合补位11A", 2.9e9),
+                ("019012", "测试混合补位12A", 2.8e9),
+                ("019013", "测试混合补位13A", 2.7e9),
+                ("019014", "测试混合补位14A", 2.6e9),
             ]
         ]
         sina_payloads = {
@@ -166,10 +181,24 @@ class FundsTop30BuildTest(unittest.TestCase):
                 _sina_row("020256", "中欧中证机器人指数发起C", 1.2e9, 1.4),
                 _sina_row("110022", "易方达消费行业股票", 9e9, 2.8),
                 _sina_row("510300", "华泰柏瑞沪深300ETF", 9e10, 4.0),
+                *[
+                    _sina_row(f"03{i:04d}", f"测试股票补位{i}A", (50 - i) * 1e8, 1.5)
+                    for i in range(1, 25)
+                ],
             ],
             "3": [
-                _sina_row(f"{i:06d}", f"测试债券{i}A", (400 - i) * 1e8, 1.1)
-                for i in range(1, 8)
+                # AUM fillers after pure-bond pins (quota 20)
+                *[_sina_row(f"{i:06d}", f"测试债券{i}A", (400 - i) * 1e8, 1.1) for i in range(1, 20)],
+                # Dashboard pure-bond pins (one deliberately contains 联接)
+                _sina_row("015909", "方正富邦鸿远债券C", 2e9, 1.1),
+                _sina_row("020741", "华泰保兴安悦债券C", 1.8e9, 1.1),
+                _sina_row("007859", "平安中债-中高等级公司债利差因子指数A", 1.6e9, 1.1),
+                _sina_row("019596", "富国中债7-10年政策性金融债指数联接E", 1.5e9, 1.1),
+                _sina_row("013594", "南方中债7-10年国开行债券指数E", 1.4e9, 1.1),
+                _sina_row("011062", "广发中债7-10年国开行债券指数E", 1.3e9, 1.1),
+                _sina_row("019451", "中欧兴悦债券C", 1.2e9, 1.1),
+                _sina_row("002404", "博时裕乾纯债债券C", 1.1e9, 1.1),
+                _sina_row("161119", "易方达中债新综合债券指数发起式A", 1.0e9, 1.1),
             ],
             "1": hybrid_rows,
             "6": [
@@ -178,6 +207,10 @@ class FundsTop30BuildTest(unittest.TestCase):
                 _sina_row("100055", "富国全球科技互联网股票(QDII)A", 9e8, 5.0),
                 _sina_row("006373", "国富全球科技互联混合(QDII)人民币A", 8e8, 7.0),
                 _sina_row("513330", "华夏恒生互联网科技业ETF(QDII)", 9e10, 0.3),
+                *[
+                    _sina_row(f"06{i:04d}", f"测试QDII补位{i}A", (80 - i) * 1e8, 2.0)
+                    for i in range(1, 25)
+                ],
             ],
         }
 
@@ -225,9 +258,16 @@ class FundsTop30BuildTest(unittest.TestCase):
         self.assertNotIn("003096", hybrid_codes)
         self.assertNotIn("009881", hybrid_codes)
         equity_codes = [r["code"] for r in result["rows"] if r["category"] == "equity"]
-        self.assertEqual(equity_codes, list(FORCE_INCLUDE["equity"]))
+        self.assertEqual(equity_codes[:4], list(FORCE_INCLUDE["equity"]))
+        self.assertEqual(len(equity_codes), QUOTA["equity"])
+        self.assertIn("110022", equity_codes)
+        bond_codes = [r["code"] for r in result["rows"] if r["category"] == "bond"]
+        self.assertEqual(bond_codes[: len(PURE_BOND_PIN_CODES)], list(PURE_BOND_PIN_CODES))
+        self.assertEqual(len(bond_codes), QUOTA["bond"])
+        self.assertGreater(QUOTA["bond"], len(PURE_BOND_PIN_CODES))
         self.assertIn("adviceFramework", result)
         self.assertTrue(result.get("adviceCounts"))
+        bond_pins = set(FORCE_INCLUDE.get("bond") or ())
         for row in result["rows"]:
             self.assertIsNotNone(row.get("nav"))
             self.assertEqual(row.get("navDate"), "2026-07-24")
@@ -245,9 +285,11 @@ class FundsTop30BuildTest(unittest.TestCase):
             self.assertTrue(row.get("adviceDetail"))
             self.assertTrue(row.get("adviceRisk"))
             name_u = (row.get("name") or "").upper()
-            # 池内默认排除 ETF/联接；强制钉选也不应再钉联接类
+            code = str(row["code"]).zfill(6)
+            # 默认排除 ETF；联接仅允许债券袖钉选（看板纯债样本）
             self.assertNotIn("ETF", name_u)
-            self.assertNotIn("联接", row.get("name") or "")
+            if code not in bond_pins:
+                self.assertNotIn("联接", row.get("name") or "")
             self.assertFalse(str(row["code"]).startswith(("15", "51", "56", "58")))
 
         with TemporaryDirectory() as tmp:

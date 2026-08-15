@@ -39,7 +39,7 @@ npm run engine:generate
 ```
 
 产物：`data/out/latest.json`；明细在 `engine/reports/`。  
-`generate` **末尾会顺带刷 30 公募与我的持仓净值/估值**（失败不阻断 ETF 产物）。
+`generate` **末尾会顺带刷 30 公募与我的持仓净值/估值**（失败不阻断 ETF 产物），并刷新 **理财每日新知**（失败亦不阻断）。
 
 30 公募（也可单独刷）：
 
@@ -48,7 +48,7 @@ cd engine && python3.12 cli_app.py funds-top30 --rebuild
 python3.12 cli_app.py funds-top30   # 仅刷净值
 ```
 
-产物：`data/out/funds-top30.json`（股4/债4/混16/QDII4；股票型固定科技主题：半导体/芯片/CPO·通信设备/机器人；混合型含手动增删；最新已公布净值 + 实时估值含涨跌值）。
+产物：`data/out/funds-top30.json`（股/债/混/QDII 各 20；债券型优先看板纯债钉选再按规模补足；股票型优先科技主题钉选；混合型含手动增删；最新已公布净值 + 实时估值含涨跌值）。
 
 我的持仓（个人归档，与代表池并存；不含货币/联接）：
 

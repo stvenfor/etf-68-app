@@ -12,7 +12,12 @@
     "validate": "python3 scripts/validate_video.py out/sector-fund-flow.mp4",
     "demo-data": "python3 scripts/generate_demo_flow.py --trade-date 2026-07-28 --output src/data/sector-fund-flow-2026-07-28.json",
     "mix-bgm": "bash scripts/mix_bgm.sh out/sector-fund-flow.mp4 assets/bgm.wav loudnorm",
-    "validate-data": "python3 scripts/validate_data.py src/data/sector-fund-flow-$(date +%F).json --expect-date $(date +%F) --expect-mode close"
+    "validate-data": "python3 scripts/validate_data.py src/data/sector-fund-flow-$(date +%F).json --expect-date $(date +%F) --expect-mode close",
+    "daily": "bash scripts/daily_close_pipeline.sh",
+    "daily:skip-publish": "bash scripts/daily_close_pipeline.sh --skip-publish",
+    "schedule:install": "bash scripts/install_launchd.sh install",
+    "schedule:uninstall": "bash scripts/install_launchd.sh uninstall",
+    "schedule:status": "bash scripts/install_launchd.sh status"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.500",

@@ -62,14 +62,45 @@ class BondReviewTests(unittest.TestCase):
             credit_delta_bp=0.0,
         )
         by_name = {r["name"]: r for r in rows}
-        # 超长：-20.3 * (-3) * 1.165 ≈ +71 → 收 71 蛋
+        # 超长加权 Δbp = 0.5*(-3)+0.5*(2)= -0.5
+        # eggs = -20.3 * (-0.5) * 1.165 ≈ +11.8 → 收 12 蛋
         ultra = by_name["方正富邦鸿远C"]["implied"]
         self.assertEqual(ultra["side"], "gain")
-        self.assertGreaterEqual(ultra["eggs"], 70)
-        # 中长：-8.8 * 2 * 1.341 ≈ -23.6 → 丢 24 蛋
+        self.assertEqual(ultra["eggs"], 12)
+        self.assertAlmostEqual(ultra["rateBp"], -0.5, places=3)
+        # 中长加权 Δbp = 0.6*2 + 0.4*(-1) = 0.8
+        # eggs = -8.8 * 0.8 * 1.341 ≈ -9.4 → 丢 9 蛋
         mid = by_name["平安5-10政金债A"]["implied"]
         self.assertEqual(mid["side"], "loss")
-        self.assertGreaterEqual(mid["eggs"], 20)
+        self.assertEqual(mid["eggs"], 9)
+
+    def test_actual_nav_eggs_attached(self) -> None:
+        rows = build_pure_bond_estimates(
+            yield_deltas={"y2": 0.0, "y5": 0.0, "y10": 0.0, "y30": 0.0},
+            nav_by_code={
+                "015909": {"dayChangePct": -0.04, "navDate": "2026-08-14", "nav": 1.0873},
+            },
+        )
+        row = next(r for r in rows if r["code"] == "015909")
+        self.assertEqual(row["navRetPct"], -0.04)
+        self.assertEqual(row["navDate"], "2026-08-14")
+        self.assertEqual(row["actual"]["side"], "loss")
+        self.assertEqual(row["actual"]["eggs"], 4)
+        self.assertIn("丢", row["actual"]["label"])
+
+    def test_blended_ultra_matches_015909_case(self) -> None:
+        # 实盘日：30Y +0.46、10Y -0.68 → 加权 -0.11 → 隐含接近小幅收蛋，而非单盯30Y丢11
+        from src.bond_review import implied_eggs_from_curve
+
+        out = implied_eggs_from_curve(
+            duration=20.3,
+            rate_pos=116.5,
+            credit_pos=0.0,
+            yield_deltas={"y2": -0.79, "y5": -0.74, "y10": -0.68, "y30": 0.46},
+        )
+        self.assertEqual(out["side"], "gain")
+        self.assertLessEqual(out["eggs"], 5)
+        self.assertGreaterEqual(out["eggs"], 1)
 
     def test_build_bond_review_with_fake_yields(self) -> None:
         yields_payload = {

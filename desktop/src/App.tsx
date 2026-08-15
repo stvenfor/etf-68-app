@@ -19,7 +19,7 @@ import {
   hasActiveFilters,
   uniqSorted,
 } from "./filters";
-import DashboardBoard from "./dashboard/DashboardBoard";
+import DashboardShell from "./dashboard/DashboardShell";
 import EventMatrixPanel from "./EventMatrixPanel";
 import EtfPanoramaModal from "./EtfPanoramaModal";
 import EtfAiAnalysisModal from "./EtfAiAnalysisModal";
@@ -93,6 +93,142 @@ function maMacdVolTone(signal: string): string {
   if (signal === "等量能" || signal === "等买点" || signal === "方向未齐") return "warn";
   if (signal === "量能存疑" || signal === "暂缓") return "bad";
   return "";
+}
+
+function TabIcon({ name }: { name: string }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+  };
+  switch (name) {
+    case "board":
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+        </svg>
+      );
+    case "funds":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v8M9.5 10.5c.6-1 1.6-1.5 2.5-1.5s1.9.5 2.5 1.5M9.5 13.5c.6 1 1.6 1.5 2.5 1.5s1.9-.5 2.5-1.5" />
+        </svg>
+      );
+    case "rotation":
+      return (
+        <svg {...common}>
+          <path d="M4 12a8 8 0 0 1 13.5-5.8M20 12a8 8 0 0 1-13.5 5.8" />
+          <path d="M17 3v4h4M7 21v-4H3" />
+        </svg>
+      );
+    case "finance":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" />
+          <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M12 12v3" />
+        </svg>
+      );
+    case "delivery":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M3 10h18M8 3v4M16 3v4" />
+        </svg>
+      );
+    case "citic":
+      return (
+        <svg {...common}>
+          <path d="M4 19V5M4 19h16" />
+          <path d="M8 15l3-4 3 2 4-6" />
+        </svg>
+      );
+    case "events":
+      return (
+        <svg {...common}>
+          <path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" />
+        </svg>
+      );
+    case "impact":
+      return (
+        <svg {...common}>
+          <path d="M12 9v4M12 17h.01" />
+          <path d="M10.3 4.3 2.8 17.2A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.8L13.7 4.3a2 2 0 0 0-3.4 0z" />
+        </svg>
+      );
+    case "detail":
+      return (
+        <svg {...common}>
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" />
+        </svg>
+      );
+  }
+}
+
+function StatIcon({ tone }: { tone: string }) {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+  };
+  if (tone === "good") {
+    return (
+      <svg {...common}>
+        <path d="M12 3v18M7 8l5-5 5 5" />
+      </svg>
+    );
+  }
+  if (tone === "warn") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v5M12 16h.01" />
+      </svg>
+    );
+  }
+  if (tone === "bad") {
+    return (
+      <svg {...common}>
+        <path d="M12 21V3M7 16l5 5 5-5" />
+      </svg>
+    );
+  }
+  if (tone === "muted") {
+    return (
+      <svg {...common}>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M8 10h8M8 14h5" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l2.5 2.5" />
+    </svg>
+  );
 }
 
 export default function App() {
@@ -309,79 +445,156 @@ export default function App() {
 
   const counts = bundle?.counts?.byAction || {};
   const impactRows = bundle?.impactEvents?.rows || [];
+  const activeTab = MAIN_TABS.find((t) => t.id === tab) || MAIN_TABS[0];
+  const showStats = tab !== "board" && tab !== "funds30" && tab !== "rotation" && tab !== "finance";
+  const candidateCount = counts["技术候选"] || 0;
 
   return (
     <div className={`app ${tab === "board" ? "is-board" : ""}`}>
-      <header className="topbar">
-        <div className="brand">ETF-68</div>
-        <div className="meta">
-          {bundle ? `${bundle.dataDate} · 温度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"} · {pyInfo}
+      <aside className="sidebar" aria-label="主导航">
+        <div className="sidebar-brand" title="ETF-68">
+          <span className="sidebar-brand-mark">68</span>
         </div>
-        <div className="spacer" />
-        <button className="btn" disabled={!bundle || busy} onClick={onSpeak}>
-          {speaking ? "停止播报" : "日更播报"}
-        </button>
-        <button className="btn" disabled={busy} onClick={() => window.etf68.assembleLatest({}).then((r) => {
-          if (r.ok && r.bundle) {
-            setBundle(r.bundle);
-            setStatus(`已组装 ${r.bundle.dataDate}`);
-          } else setStatus(r.error || "组装失败");
-        })}>
-          从本地报告组装
-        </button>
-        <button className="btn primary" disabled={busy} onClick={onGenerate}>
-          {busy ? "生成中…" : "生成今日"}
-        </button>
-      </header>
-
-      {tab !== "board" && tab !== "funds30" && tab !== "rotation" && tab !== "finance" && (
-        <section className="stats">
-          <div className="stat">
-            <div className="label">状态</div>
-            <div className="value">{status}</div>
-          </div>
-          <div className="stat">
-            <div className="label">技术候选</div>
-            <div className="value">{counts["技术候选"] || 0}</div>
-          </div>
-          <div className="stat">
-            <div className="label">观察</div>
-            <div className="value">{counts["观察"] || 0}</div>
-          </div>
-          <div className="stat">
-            <div className="label">不追涨</div>
-            <div className="value">{counts["不追涨"] || 0}</div>
-          </div>
-          <div className="stat">
-            <div className="label">暂缓</div>
-            <div className="value">{counts["暂缓"] || 0}</div>
-          </div>
-          <div className="stat">
-            <div className="label">明细行数</div>
-            <div className="value">{bundle?.rows.length || 0}</div>
-          </div>
-        </section>
-      )}
-
-      {(busy || logs.length > 0) && (
-        <div style={{ padding: "0 18px 10px" }}>
-          <div className="logs">{logs.slice(-30).join("\n") || "等待引擎输出…"}</div>
+        <nav className="sidebar-nav">
+          {MAIN_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`sidebar-item ${tab === t.id ? "active" : ""}`}
+              title={t.label}
+              aria-label={t.label}
+              aria-current={tab === t.id ? "page" : undefined}
+              onClick={() => setTab(t.id)}
+            >
+              <TabIcon name={t.icon} />
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <span className={`sidebar-dot ${bundle ? "ok" : ""}`} />
+          <span className="sidebar-host">local</span>
         </div>
-      )}
+      </aside>
 
-      <nav className="tabs">
-        {MAIN_TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`tab ${tab === t.id ? "active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="topbar-left">
+            <div className="brand">ETF-68</div>
+            <div className="topbar-divider" />
+            <div className="topbar-page">
+              <span className="topbar-page-title">{activeTab.label}</span>
+              <span className="meta">
+                {bundle ? `${bundle.dataDate} · 温度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"}
+                {pyInfo ? ` · ${pyInfo}` : ""}
+              </span>
+            </div>
+          </div>
+          <div className="topbar-chips">
+            {bundle ? (
+              <span className="status-chip">
+                <span className="status-chip-dot live" />
+                已加载
+              </span>
+            ) : (
+              <span className="status-chip warn">
+                <span className="status-chip-dot" />
+                待加载
+              </span>
+            )}
+            <span className="status-chip accent" title="技术候选">
+              候选 {candidateCount}
+            </span>
+          </div>
+          <div className="topbar-actions">
+            <button className="btn" disabled={!bundle || busy} onClick={onSpeak}>
+              {speaking ? "停止播报" : "日更播报"}
+            </button>
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() =>
+                window.etf68.assembleLatest({}).then((r) => {
+                  if (r.ok && r.bundle) {
+                    setBundle(r.bundle);
+                    setStatus(`已组装 ${r.bundle.dataDate}`);
+                  } else setStatus(r.error || "组装失败");
+                })
+              }
+            >
+              从本地报告组装
+            </button>
+            <button className="btn primary" disabled={busy} onClick={onGenerate}>
+              {busy ? "生成中…" : "生成今日"}
+            </button>
+          </div>
+        </header>
 
-      <main className="main">
+        {showStats && (
+          <section className="stats">
+            <div className="stat">
+              <div className="stat-icon tone-info">
+                <StatIcon tone="info" />
+              </div>
+              <div className="stat-body">
+                <div className="label">状态</div>
+                <div className="value value-sm">{status}</div>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-icon tone-good">
+                <StatIcon tone="good" />
+              </div>
+              <div className="stat-body">
+                <div className="label">技术候选</div>
+                <div className="value">{counts["技术候选"] || 0}</div>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-icon tone-warn">
+                <StatIcon tone="warn" />
+              </div>
+              <div className="stat-body">
+                <div className="label">观察</div>
+                <div className="value">{counts["观察"] || 0}</div>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-icon tone-bad">
+                <StatIcon tone="bad" />
+              </div>
+              <div className="stat-body">
+                <div className="label">不追涨</div>
+                <div className="value">{counts["不追涨"] || 0}</div>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-icon tone-muted">
+                <StatIcon tone="muted" />
+              </div>
+              <div className="stat-body">
+                <div className="label">暂缓</div>
+                <div className="value">{counts["暂缓"] || 0}</div>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-icon tone-accent">
+                <StatIcon tone="muted" />
+              </div>
+              <div className="stat-body">
+                <div className="label">明细行数</div>
+                <div className="value">{bundle?.rows.length || 0}</div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {(busy || logs.length > 0) && (
+          <div className="logs-wrap">
+            <div className="logs">{logs.slice(-30).join("\n") || "等待引擎输出…"}</div>
+          </div>
+        )}
+
+        <main className="main">
         {tab === "funds30" && <FundsTop30Panel />}
         {tab === "rotation" && <EtfRotationPanel />}
         {tab === "finance" && <FinanceResearchPanel />}
@@ -391,7 +604,7 @@ export default function App() {
         )}
 
         {bundle && tab === "board" && (
-          <DashboardBoard
+          <DashboardShell
             bundle={bundle}
             liveAt={boardLiveAt || bundle.marketBoard?.fetchedAt || null}
             refreshing={boardRefreshing}
@@ -910,6 +1123,7 @@ export default function App() {
           onClose={() => setAnalysisEtf(null)}
         />
       )}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,20 @@
+#!/bin/bash
+# launchd boot — outside Desktop to avoid TCC; opens Terminal to run pipeline.
+set -euo pipefail
+LOG_DIR="${HOME}/Library/Logs/etf68-finance-news"
+PIPELINE="__PIPELINE__"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BOOT_LOG="${LOG_DIR}/launchd-boot-${STAMP}.log"
+mkdir -p "$LOG_DIR"
+{
+  echo "boot $(date -Iseconds)"
+  echo "pipeline=$PIPELINE"
+} >>"$BOOT_LOG"
+
+osascript >>"$BOOT_LOG" 2>&1 <<EOF
+tell application "Terminal"
+  do script "export PATH='${PATH:-/usr/bin:/bin}'; export TZ=Asia/Shanghai; export NO_PROXY='*'; /bin/bash $(printf %q "$PIPELINE") >> $(printf %q "$LOG_DIR")/pipeline-terminal.log 2>&1; echo EXIT:\\\$?; exit"
+end tell
+EOF
+echo "spawned $(date -Iseconds)" >>"$BOOT_LOG"
+exit 0

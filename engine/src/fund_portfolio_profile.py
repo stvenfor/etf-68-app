@@ -216,6 +216,7 @@ def fetch_one_profile(
     fetch: FetchFn = _default_fetch,
     previous: Mapping[str, Any] | None = None,
     asset_mix: Mapping[str, Any] | None = None,
+    industry_top_n: int = 5,
 ) -> dict[str, Any]:
     """Fetch industries + risk (+ asset mix if not provided). Soft-fail with previous fallback."""
     prev = _copy_profile(previous)
@@ -234,7 +235,7 @@ def fetch_one_profile(
             errors.append("assetMix")
 
     try:
-        industries, as_of = fetch_hypz_industries(code, fetch=fetch)
+        industries, as_of = fetch_hypz_industries(code, fetch=fetch, top_n=industry_top_n)
         if industries:
             out["industries"] = industries
             out["industryAsOf"] = as_of
@@ -275,6 +276,7 @@ def enrich_portfolio_profile(
     fetch: FetchFn = _default_fetch,
     previous_by_code: Mapping[str, Mapping[str, Any]] | None = None,
     workers: int = 5,
+    industry_top_n: int = 5,
 ) -> list[dict[str, Any]]:
     """Attach risk / assetMix / industries onto each row (soft-fail per code)."""
     prev_map = previous_by_code or {}
@@ -290,6 +292,7 @@ def enrich_portfolio_profile(
             fetch=fetch,
             previous=prev_map.get(code),
             asset_mix=existing_mix,
+            industry_top_n=industry_top_n,
         )
         return idx, profile
 

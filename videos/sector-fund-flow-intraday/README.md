@@ -25,7 +25,23 @@ python3 scripts/generate_demo_flow.py \
   --output src/data/sector-fund-flow-2026-07-28.json
 ```
 
-然后把 `src/Root.tsx` 里的 JSON import 换成对应文件。
+然后：
+
+```bash
+cp -f src/data/sector-fund-flow-YYYY-MM-DD.json src/data/sector-fund-flow-latest.json
+```
+
+`src/Root.tsx` 固定读取 `sector-fund-flow-latest.json`。
+
+## 自动日更（交易日 15:30）
+
+```bash
+./scripts/install_launchd.sh install   # 注册 launchd
+./scripts/install_launchd.sh run-now   # 立刻跑（成片+抖音公开）
+./scripts/install_launchd.sh run-now --skip-publish  # 只成片不发
+```
+
+详见仓库 skill：`.cursor/skills/etf-68-app/sector-fund-flow-video.md`。
 
 ## 渲染
 

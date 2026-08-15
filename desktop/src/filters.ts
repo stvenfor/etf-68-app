@@ -1,15 +1,15 @@
 import type { EtfRow } from "./types";
 
 export const MAIN_TABS = [
-  { id: "board", label: "数据看板" },
-  { id: "funds30", label: "30 公募" },
-  { id: "rotation", label: "ETF轮动" },
-  { id: "finance", label: "理财研究" },
-  { id: "delivery", label: "交割日历" },
-  { id: "citic", label: "多空数据" },
-  { id: "events", label: "事件→ETF" },
-  { id: "impact", label: "实质利好/利空" },
-  { id: "detail", label: "68 ETF 明细" },
+  { id: "board", label: "数据看板", icon: "board" },
+  { id: "funds30", label: "30 公募", icon: "funds" },
+  { id: "rotation", label: "ETF轮动", icon: "rotation" },
+  { id: "finance", label: "理财研究", icon: "finance" },
+  { id: "delivery", label: "交割日历", icon: "delivery" },
+  { id: "citic", label: "多空数据", icon: "citic" },
+  { id: "events", label: "事件→ETF", icon: "events" },
+  { id: "impact", label: "实质利好/利空", icon: "impact" },
+  { id: "detail", label: "68 ETF 明细", icon: "detail" },
 ] as const;
 
 export const ACTIONS = ["全部", "技术候选", "观察", "不追涨", "暂缓"] as const;

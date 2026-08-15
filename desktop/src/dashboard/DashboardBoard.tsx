@@ -53,12 +53,12 @@ export default function DashboardBoard({ bundle, liveAt, refreshing, onRefresh }
   );
 
   const kpis = [
-    { label: "市场温度", value: `${fmtNum(bundle.breadthPct, 1)}%`, tone: toneByBreadth(bundle.breadthPct) },
-    { label: "技术候选", value: String(byAction["技术候选"] || 0), tone: "good" },
-    { label: "观察", value: String(byAction["观察"] || 0), tone: "warn" },
-    { label: "不追涨", value: String(byAction["不追涨"] || 0), tone: "bad" },
-    { label: "暂缓", value: String(byAction["暂缓"] || 0), tone: "" },
-    { label: "样本数", value: String(bundle.rows.length), tone: "" },
+    { label: "市场温度", value: `${fmtNum(bundle.breadthPct, 1)}%`, tone: toneByBreadth(bundle.breadthPct), icon: "temp" },
+    { label: "技术候选", value: String(byAction["技术候选"] || 0), tone: "good", icon: "up" },
+    { label: "观察", value: String(byAction["观察"] || 0), tone: "warn", icon: "watch" },
+    { label: "不追涨", value: String(byAction["不追涨"] || 0), tone: "bad", icon: "down" },
+    { label: "暂缓", value: String(byAction["暂缓"] || 0), tone: "", icon: "pause" },
+    { label: "样本数", value: String(bundle.rows.length), tone: "", icon: "sample" },
   ];
 
   return (
@@ -97,8 +97,13 @@ export default function DashboardBoard({ bundle, liveAt, refreshing, onRefresh }
       <div className="board-kpis">
         {kpis.map((k) => (
           <div key={k.label} className={`board-kpi ${k.tone}`}>
-            <div className="board-kpi-label">{k.label}</div>
-            <div className="board-kpi-value">{k.value}</div>
+            <div className={`board-kpi-icon tone-${k.tone || "muted"}`} aria-hidden>
+              <KpiIcon name={k.icon} />
+            </div>
+            <div className="board-kpi-body">
+              <div className="board-kpi-label">{k.label}</div>
+              <div className="board-kpi-value">{k.value}</div>
+            </div>
           </div>
         ))}
       </div>
@@ -344,7 +349,9 @@ function PureBondEstimateTable({ rows }: { rows: BondPureFundRow[] }) {
     <div className="board-bond-funds">
       <div className="board-bond-funds-head">
         <div className="board-bond-col-title">纯债基金 · 今日估算</div>
-        <div className="board-bond-funds-hint">预判按久期分档 · 隐含按曲线 Δbp×久期×仓位</div>
+        <div className="board-bond-funds-hint">
+          预判按久期分档 · 隐含多关键点加权 · 实盘按最新净值日涨跌
+        </div>
       </div>
       <div className="board-bond-funds-table-wrap">
         <table className="board-bond-funds-table">
@@ -356,6 +363,7 @@ function PureBondEstimateTable({ rows }: { rows: BondPureFundRow[] }) {
               <th>久期</th>
               <th>今日估算</th>
               <th>曲线隐含</th>
+              <th>净值实盘</th>
             </tr>
           </thead>
           <tbody>
@@ -383,6 +391,14 @@ function PureBondEstimateTable({ rows }: { rows: BondPureFundRow[] }) {
                   <span className={`board-bond-estimate ${eggToneClass(row.implied)}`}>
                     {row.implied?.label || "—"}
                   </span>
+                </td>
+                <td>
+                  <span className={`board-bond-estimate ${eggToneClass(row.actual)}`}>
+                    {row.actual?.label || "—"}
+                  </span>
+                  {row.navDate ? (
+                    <div className="board-bond-fund-sub mono">{row.navDate}</div>
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -480,6 +496,60 @@ function ChartCard({
       <div className="board-card-body">{children}</div>
     </section>
   );
+}
+
+function KpiIcon({ name }: { name: string }) {
+  const common = {
+    width: 15,
+    height: 15,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (name) {
+    case "temp":
+      return (
+        <svg {...common}>
+          <path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z" />
+        </svg>
+      );
+    case "up":
+      return (
+        <svg {...common}>
+          <path d="M12 19V5M7 10l5-5 5 5" />
+        </svg>
+      );
+    case "down":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14M7 14l5 5 5-5" />
+        </svg>
+      );
+    case "watch":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v4l2.5 2.5" />
+        </svg>
+      );
+    case "pause":
+      return (
+        <svg {...common}>
+          <rect x="7" y="6" width="3.5" height="12" rx="1" />
+          <rect x="13.5" y="6" width="3.5" height="12" rx="1" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M8 10h8M8 14h5" />
+        </svg>
+      );
+  }
 }
 
 function toneByBreadth(v: number | null | undefined): string {

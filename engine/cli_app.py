@@ -595,6 +595,22 @@ def cmd_funds_top30(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_fund_panorama(args: argparse.Namespace) -> int:
+    """Fetch open-end fund NAV history for 基金数据全景 modal."""
+    from src.fund_panorama import build_fund_panorama
+
+    meta: dict[str, Any] = {}
+    if getattr(args, "name", None):
+        meta["name"] = args.name
+    if getattr(args, "category", None):
+        meta["category"] = args.category
+    if getattr(args, "category_label", None):
+        meta["categoryLabel"] = args.category_label
+    result = build_fund_panorama(args.code, meta=meta or None)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def _refresh_my_holdings(*, output: Path | None = None) -> dict[str, Any]:
     """Refresh personal holdings NAV / estimates + position advice."""
     from src.my_holdings import build_my_holdings, write_my_holdings
@@ -939,6 +955,35 @@ def cmd_macro_pmi(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_macro_timing(args: argparse.Namespace) -> int:
+    """Mirror OneChart macro timing JSON into data/out/macro-timing/."""
+    from src.macro_onechart import default_cache_dir, load_bundle, load_dispersion_window, refresh_bundle
+
+    cache = Path(args.cache_dir) if args.cache_dir else default_cache_dir()
+    action = args.action
+    try:
+        if action == "load":
+            payload = load_bundle(cache)
+        elif action == "refresh":
+            payload = refresh_bundle(
+                cache_dir=cache,
+                include_dispersion=not args.skip_dispersion,
+            )
+        elif action == "dispersion-window":
+            payload = load_dispersion_window(
+                end_date=args.end_date,
+                cache_dir=cache,
+                fetch_missing=not args.no_fetch,
+            )
+        else:
+            payload = {"ok": False, "error": f"unknown_action:{action}"}
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0 if payload.get("ok") else 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return 1
+
+
 def cmd_macro_flash_script(args: argparse.Namespace) -> int:
     """Build macro-flash narration JSON from a PMI snapshot."""
     from src.macro_flash_script import build_macro_flash_script
@@ -1200,6 +1245,39 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 flush=True,
             )
 
+        finance_news_summary: dict[str, Any] | None = None
+        print(json.dumps({"event": "step_start", "step": "finance_news"}, ensure_ascii=False), flush=True)
+        try:
+            from src.finance_research import refresh_finance_news
+
+            finance_news_summary = refresh_finance_news(limit=12)
+            print(
+                json.dumps(
+                    {
+                        "event": "step_done",
+                        "step": "finance_news",
+                        "ok": bool(finance_news_summary.get("ok")),
+                        "count": finance_news_summary.get("count"),
+                        "updatedAt": finance_news_summary.get("updatedAt"),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+        except Exception as news_exc:  # noqa: BLE001
+            print(
+                json.dumps(
+                    {
+                        "event": "step_error",
+                        "step": "finance_news",
+                        "ok": False,
+                        "error": str(news_exc),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+
         print(
             json.dumps(
                 {
@@ -1211,6 +1289,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
                     "counts": bundle["counts"],
                     "fundsTop30": funds_summary,
                     "myHoldings": holdings_summary,
+                    "financeNews": finance_news_summary,
                 },
                 ensure_ascii=False,
             ),
@@ -1288,6 +1367,29 @@ def main() -> int:
     )
     p_pmi.set_defaults(func=cmd_macro_pmi)
 
+    p_macro = sub.add_parser(
+        "macro-timing",
+        help="Mirror OneChart 宏观择时 (state/series/dispersion) into data/out/macro-timing/",
+    )
+    p_macro.add_argument(
+        "action",
+        choices=("load", "refresh", "dispersion-window"),
+        help="load cache | refresh from onechart.top | load 90d contribution window",
+    )
+    p_macro.add_argument("--cache-dir", default=None, help="Override cache directory")
+    p_macro.add_argument(
+        "--skip-dispersion",
+        action="store_true",
+        help="On refresh, skip dispersion contribution download",
+    )
+    p_macro.add_argument("--end-date", default=None, help="YYYYMMDD end date for dispersion-window")
+    p_macro.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="dispersion-window: do not download missing year shards",
+    )
+    p_macro.set_defaults(func=cmd_macro_timing)
+
     p_flash = sub.add_parser("macro-flash-script", help="Build PMI macro-flash narration JSON")
     p_flash.add_argument("--month", default=None, help="YYYY-MM; fetches PMI if no --snapshot")
     p_flash.add_argument(
@@ -1333,6 +1435,13 @@ def main() -> int:
         help="Output JSON path (default: data/out/funds-top30.json)",
     )
     p_funds.set_defaults(func=cmd_funds_top30)
+
+    p_fpan = sub.add_parser("fund-panorama", help="Fetch open-end fund NAV panorama series")
+    p_fpan.add_argument("--code", required=True, help="6-digit fund code")
+    p_fpan.add_argument("--name", default=None, help="Optional display name")
+    p_fpan.add_argument("--category", default=None, help="Optional category key")
+    p_fpan.add_argument("--category-label", default=None, help="Optional category label")
+    p_fpan.set_defaults(func=cmd_fund_panorama)
 
     p_hold = sub.add_parser("my-holdings", help="Build/refresh personal fund holdings + position advice")
     p_hold.add_argument(

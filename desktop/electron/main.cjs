@@ -526,7 +526,7 @@ ipcMain.handle("refresh-funds-top30", async (_event, payload = {}) => {
   const args = ["cli_app.py", "funds-top30"];
   if (payload.rebuild) args.push("--rebuild");
   try {
-    const { stdout } = await runPython(args);
+    const { stdout } = await runPython(args, { timeoutMs: 360000 });
     const line = stdout.trim().split(/\r?\n/).pop();
     const parsed = JSON.parse(line);
     if (!parsed.ok) return parsed;
@@ -539,6 +539,23 @@ ipcMain.handle("refresh-funds-top30", async (_event, payload = {}) => {
       bundle: JSON.parse(fs.readFileSync(file, "utf8")),
       rebuilt: Boolean(parsed.rebuilt),
     };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("load-fund-panorama", async (_event, payload = {}) => {
+  const code = String(payload.code || "").trim();
+  if (!code) return { ok: false, error: "missing_code" };
+  const args = ["cli_app.py", "fund-panorama", "--code", code];
+  if (payload.name) args.push("--name", String(payload.name));
+  if (payload.category) args.push("--category", String(payload.category));
+  if (payload.categoryLabel) args.push("--category-label", String(payload.categoryLabel));
+  try {
+    const { stdout } = await runPython(args, { timeoutMs: 60000 });
+    const line = stdout.trim().split(/\r?\n/).pop();
+    const parsed = JSON.parse(line);
+    return { ok: Boolean(parsed.ok), bundle: parsed, error: parsed.error || undefined };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -961,6 +978,50 @@ ipcMain.handle("speak-text", async (_event, payload = {}) => {
       cached: Boolean(parsed.cached),
       bytes: parsed.bytes,
     };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+function parsePythonJson(stdout) {
+  const line = String(stdout || "")
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .pop();
+  if (!line) throw new Error("empty_python_stdout");
+  return JSON.parse(line);
+}
+
+ipcMain.handle("load-macro-timing", async () => {
+  try {
+    const { stdout } = await runPython(["cli_app.py", "macro-timing", "load"], {
+      timeoutMs: 60000,
+    });
+    return parsePythonJson(stdout);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("refresh-macro-timing", async (_event, payload = {}) => {
+  const args = ["cli_app.py", "macro-timing", "refresh"];
+  if (payload.skipDispersion) args.push("--skip-dispersion");
+  try {
+    const { stdout } = await runPython(args, { timeoutMs: 300000 });
+    return parsePythonJson(stdout);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
+
+ipcMain.handle("load-macro-dispersion-window", async (_event, payload = {}) => {
+  const args = ["cli_app.py", "macro-timing", "dispersion-window"];
+  if (payload.endDate) args.push("--end-date", String(payload.endDate));
+  if (payload.noFetch) args.push("--no-fetch");
+  try {
+    const { stdout } = await runPython(args, { timeoutMs: 300000 });
+    return parsePythonJson(stdout);
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }

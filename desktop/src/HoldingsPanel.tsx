@@ -452,14 +452,16 @@ export default function HoldingsPanel() {
 
                       <div className="holdings-metrics">
                         <div className="holdings-metric">
-                          <span className="holdings-metric-label">{compact ? "当日净值" : "单位净值"}</span>
+                          <span className="holdings-metric-label">
+                            {compact ? "当日净值" : "单位净值"}
+                            {r.navDate ? (
+                              <span className="holdings-metric-date mono"> · {(r.navDate || "").slice(0, 10)}</span>
+                            ) : null}
+                          </span>
                           <span className="holdings-metric-value mono">{fmtNum(r.nav ?? null, 4)}</span>
                           <span className={`holdings-metric-sub ${toneClass(r.dayChangePct)}`}>
                             {fmtPct(r.dayChangePct ?? null, 2)}
                           </span>
-                          {!compact ? (
-                            <span className="holdings-metric-foot mono">{r.navDate || "—"}</span>
-                          ) : null}
                         </div>
                         <div className="holdings-metric holdings-metric-est">
                           <span className="holdings-metric-label">{compact ? "估值" : "实时估值"}</span>

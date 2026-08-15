@@ -5,12 +5,15 @@
 - 1 蛋 = 1bp
 - 债基净值上涨 = 收蛋；下跌 = 丢蛋
 - 国债收益率下行 = 收蛋；上行 = 丢蛋（Δbp = (y_t - y_{t-1}) * 100）
-- 纯债基金「今日估算」：按久期分档套用当日预判区间（示例口径）
+- 纯债「今日估算」：按久期分档套用当日预判区间（示例口径）
+- 曲线隐含：多关键点加权 Δbp×久期×仓位（超长 30Y/10Y；中长 10Y/5Y；中短 2Y/5Y）
+- 净值实盘蛋：最新已披露单位净值日涨跌对照
 """
 
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.parse import urlencode
@@ -208,6 +211,37 @@ def classify_fund_bucket(duration: float, rate_pos: float, credit_pos: float) ->
     return "mid_short"
 
 
+# 曲线隐含：多关键点加权，避免超长只盯 30Y 在曲线分化日严重失真
+RATE_BP_BLEND: dict[str, tuple[tuple[str, float], ...]] = {
+    "ultra_long": (("y30", 0.5), ("y10", 0.5)),
+    "mid_long": (("y10", 0.6), ("y5", 0.4)),
+    "mid_short": (("y2", 0.7), ("y5", 0.3)),
+    "credit": (("y2", 0.7), ("y5", 0.3)),
+}
+
+
+def blended_rate_bp(
+    bucket: str,
+    yield_deltas: Mapping[str, Optional[float]],
+) -> tuple[Optional[float], list[dict[str, Any]]]:
+    """Return (weighted Δbp, blend detail). Missing legs are skipped and weights renormalized."""
+    spec = RATE_BP_BLEND.get(bucket) or RATE_BP_BLEND["mid_short"]
+    parts: list[dict[str, Any]] = []
+    num = 0.0
+    den = 0.0
+    for key, weight in spec:
+        bp = yield_deltas.get(key)
+        if bp is None or not isinstance(bp, (int, float)):
+            parts.append({"tenor": key, "weight": weight, "deltaBp": None, "used": False})
+            continue
+        parts.append({"tenor": key, "weight": weight, "deltaBp": float(bp), "used": True})
+        num += float(bp) * float(weight)
+        den += float(weight)
+    if den <= 0:
+        return None, parts
+    return round(num / den, 4), parts
+
+
 def outlook_estimate(bucket: str, outlook: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """生成示例风格的「今日估算」文案与色调。"""
     src = outlook or DAILY_OUTLOOK
@@ -237,39 +271,48 @@ def implied_eggs_from_curve(
     yield_deltas: Mapping[str, Optional[float]],
     credit_delta_bp: float | None = None,
 ) -> dict[str, Any]:
-    """曲线隐含：蛋 ≈ -久期×Δbp×利率仓位% + (-久期×信用Δbp×信用仓位%)。
+    """曲线隐含：蛋 ≈ -久期×加权Δbp×利率仓位% + (-久期×信用Δbp×信用仓位%)。
 
-    超长用 30Y，中长用 10Y，中短用 2Y；信用仓用 credit_delta_bp（缺省则 0）。
+    超长：30Y/10Y 各 50%；中长：10Y 60% + 5Y 40%；中短/信用利率腿：2Y 70% + 5Y 30%。
     """
     bucket = classify_fund_bucket(duration, rate_pos, credit_pos)
-    if bucket == "ultra_long":
-        rate_bp = yield_deltas.get("y30")
-    elif bucket == "mid_long":
-        rate_bp = yield_deltas.get("y10")
-    else:
-        rate_bp = yield_deltas.get("y2")
+    rate_bp, blend = blended_rate_bp(bucket, yield_deltas)
 
     eggs = 0.0
     used = False
-    if rate_bp is not None and isinstance(rate_bp, (int, float)):
+    if rate_bp is not None:
         eggs += -float(duration) * float(rate_bp) * (float(rate_pos) / 100.0)
         used = True
     if credit_pos and credit_delta_bp is not None and isinstance(credit_delta_bp, (int, float)):
         eggs += -float(duration) * float(credit_delta_bp) * (float(credit_pos) / 100.0)
         used = True
     if not used:
-        return {"eggs": None, "side": "flat", "label": "—", "tone": "flat", "raw": None}
+        return {
+            "eggs": None,
+            "side": "flat",
+            "label": "—",
+            "tone": "flat",
+            "raw": None,
+            "rateBp": None,
+            "blend": blend,
+        }
 
     raw = round(eggs)
+    base = {
+        "raw": eggs,
+        "rateBp": rate_bp,
+        "blend": blend,
+        "bucket": bucket,
+    }
     if raw == 0:
-        return {"eggs": 0, "side": "flat", "label": "平", "tone": "flat", "raw": eggs}
+        return {"eggs": 0, "side": "flat", "label": "平", "tone": "flat", **base}
     if raw > 0:
         return {
             "eggs": raw,
             "side": "gain",
             "label": f"收 {raw} 蛋",
             "tone": "up",
-            "raw": eggs,
+            **base,
         }
     mag = abs(raw)
     return {
@@ -277,8 +320,69 @@ def implied_eggs_from_curve(
         "side": "loss",
         "label": f"丢 {mag} 蛋",
         "tone": "dn",
-        "raw": eggs,
+        **base,
     }
+
+
+def fetch_fund_nav_day_change(
+    code: str,
+    *,
+    fetch: FetchFn | None = None,
+) -> dict[str, Any]:
+    """Latest published unit NAV day-change from Eastmoney pingzhong (soft-fail)."""
+    fetch = fetch or _default_fetch
+    code = str(code or "").zfill(6)
+    url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+    try:
+        body = fetch(url)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "code": code, "error": str(exc)}
+
+    m = re.search(r"Data_netWorthTrend\s*=\s*(\[.*?\]);", body, re.S)
+    if not m:
+        return {"ok": False, "code": code, "error": "missing_netWorthTrend"}
+    try:
+        series = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return {"ok": False, "code": code, "error": "bad_netWorthTrend"}
+    if not series:
+        return {"ok": False, "code": code, "error": "empty_netWorthTrend"}
+    last = series[-1] if isinstance(series[-1], dict) else {}
+    nav = _num(last.get("y"))
+    day_chg = _num(last.get("equityReturn"))
+    nav_date = None
+    ts = last.get("x")
+    if ts is not None:
+        try:
+            nav_date = datetime.fromtimestamp(float(ts) / 1000.0, tz=SHANGHAI).date().isoformat()
+        except (TypeError, ValueError, OSError, OverflowError):
+            nav_date = None
+    if nav is None and day_chg is None:
+        return {"ok": False, "code": code, "error": "missing_nav"}
+    return {
+        "ok": True,
+        "code": code,
+        "nav": nav,
+        "dayChangePct": day_chg,
+        "navDate": nav_date,
+    }
+
+
+def fetch_pure_bond_nav_map(
+    funds: Sequence[Mapping[str, Any]],
+    *,
+    fetch: FetchFn | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Best-effort map code → nav day-change for pure-bond rows."""
+    out: dict[str, dict[str, Any]] = {}
+    for f in funds:
+        code = str(f.get("code") or "").zfill(6)
+        if not code.isdigit():
+            continue
+        info = fetch_fund_nav_day_change(code, fetch=fetch)
+        if info.get("ok"):
+            out[code] = info
+    return out
 
 
 def build_pure_bond_estimates(
@@ -287,13 +391,16 @@ def build_pure_bond_estimates(
     outlook: Mapping[str, Any] | None = None,
     yield_deltas: Mapping[str, Optional[float]] | None = None,
     credit_delta_bp: float | None = None,
+    nav_by_code: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """收录基金 → 今日估算（分档预判）+ 曲线隐含（若有 Δbp）。"""
+    """收录基金 → 今日估算（分档预判）+ 曲线隐含 + 净值实盘蛋。"""
     rows: list[dict[str, Any]] = []
+    nav_map = nav_by_code or {}
     for f in funds or PURE_BOND_FUNDS:
         duration = float(f.get("duration") or 0)
         rate_pos = float(f.get("ratePos") or 0)
         credit_pos = float(f.get("creditPos") or 0)
+        code = str(f.get("code") or "").zfill(6)
         bucket = classify_fund_bucket(duration, rate_pos, credit_pos)
         estimate = outlook_estimate(bucket, outlook)
         implied = None
@@ -305,9 +412,19 @@ def build_pure_bond_estimates(
                 yield_deltas=yield_deltas,
                 credit_delta_bp=credit_delta_bp,
             )
+        nav_info = nav_map.get(code) if isinstance(nav_map.get(code), Mapping) else None
+        actual = None
+        nav_ret = None
+        nav_date = None
+        nav_val = None
+        if nav_info:
+            nav_ret = _num(nav_info.get("dayChangePct"))
+            nav_date = nav_info.get("navDate")
+            nav_val = _num(nav_info.get("nav"))
+            actual = eggs_from_nav_ret_pct(nav_ret)
         rows.append(
             {
-                "code": str(f.get("code") or ""),
+                "code": code if code.isdigit() else str(f.get("code") or ""),
                 "name": str(f.get("name") or ""),
                 "ratePos": rate_pos,
                 "creditPos": credit_pos,
@@ -315,6 +432,10 @@ def build_pure_bond_estimates(
                 "bucket": bucket,
                 "estimate": estimate,
                 "implied": implied,
+                "actual": actual,
+                "nav": nav_val,
+                "navDate": nav_date,
+                "navRetPct": nav_ret,
             }
         )
     return rows
@@ -449,6 +570,7 @@ def build_bond_review(
     """Assemble 今日债市收评 payload for the dashboard."""
     fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
     rows = list(rows or [])
+    live_yields = yields_payload is None
     if yields_payload is None:
         yields_payload = fetch_cn_treasury_yields(fetch=fetch)
     series = list(yields_payload.get("series") or []) if isinstance(yields_payload, Mapping) else []
@@ -544,11 +666,19 @@ def build_bond_review(
         "y10": y10.get("deltaBp"),
         "y30": y30.get("deltaBp"),
     }
+    fund_list = list(pure_bond_funds or PURE_BOND_FUNDS)
+    # Offline unit tests inject yields without fetch — skip live NAV scrape.
+    nav_by_code = (
+        fetch_pure_bond_nav_map(fund_list, fetch=fetch)
+        if live_yields or fetch is not None
+        else {}
+    )
     pure_bonds = build_pure_bond_estimates(
-        funds=pure_bond_funds,
+        funds=fund_list,
         outlook=outlook,
         yield_deltas=yield_deltas,
         credit_delta_bp=credit_delta_bp,
+        nav_by_code=nav_by_code,
     )
 
     summary = _build_summary(rate_buckets, credit)
@@ -561,7 +691,7 @@ def build_bond_review(
         "asOf": as_of,
         "fetchedAt": yields_payload.get("fetchedAt") or fetched_at,
         "unit": "1蛋=1bp",
-        "rule": "债基净值上涨=收蛋，下跌=丢蛋；国债收益率下行=收蛋，上行=丢蛋；纯债今日估算按久期分档",
+        "rule": "债基净值上涨=收蛋，下跌=丢蛋；国债收益率下行=收蛋，上行=丢蛋；曲线隐含按多关键点加权Δbp×久期×仓位；纯债附净值实盘蛋对照",
         "yields": {"y2": y2, "y5": y5, "y10": y10, "y30": y30},
         "rate": {"buckets": rate_buckets},
         "credit": credit,

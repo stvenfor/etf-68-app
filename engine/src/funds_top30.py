@@ -1,8 +1,10 @@
-"""Select and value a ~30 open-end mutual-fund representative pool.
+"""Select and value an open-end mutual-fund representative pool.
 
-Quota (by latest approximate AUM): equity 4 / bond 4 / hybrid 16 / QDII 4.
+Quota (by latest approximate AUM): equity / bond / hybrid / QDII = 20 each.
 Data: Sina fund-center scale list + Eastmoney published NAV + Sina estimate quote.
 Manual hybrid pins / excludes override pure AUM ranking when rebuilding.
+Bond sleeve pins dashboard pure-bond codes first, then fills by AUM to quota.
+Equity keeps tech theme pins first, then fills by AUM to quota.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
+from .bond_review import PURE_BOND_FUNDS
 from .fund_advice import FRAMEWORK as ADVICE_FRAMEWORK
 from .fund_advice import apply_fund_advice
 
@@ -23,20 +26,35 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 # Local HTTP(S)_PROXY often points at a dead client; fund hosts need direct egress.
 _DIRECT = build_opener(ProxyHandler({}))
 
+# Dashboard 纯债基金 → 代表性公募债券袖（钉选，重建时优先保留）
+PURE_BOND_PIN_CODES: tuple[str, ...] = tuple(
+    str(f.get("code") or "").zfill(6) for f in PURE_BOND_FUNDS if f.get("code")
+)
+PURE_BOND_PIN_NAMES: dict[str, str] = {
+    str(f.get("code") or "").zfill(6): str(f.get("name") or "")
+    for f in PURE_BOND_FUNDS
+    if f.get("code")
+}
+
 QUOTA: dict[str, int] = {
-    "equity": 4,
-    "bond": 4,
-    "hybrid": 16,
-    "qdii": 4,
+    "equity": 20,
+    "bond": 20,
+    "hybrid": 20,
+    "qdii": 20,
 }
 
 # Always keep these codes on rebuild. Missing from Sina list → stub, NAV later.
 # Equity: tech themes — 半导体 / 芯片 / CPO(通信设备代理) / 机器人（场外无纯 CPO 开放式）。
+# Bond: 数据看板「纯债基金」清单（久期/仓位样本）。
 # Hybrid: 综合性医疗主题用主动「医疗保健」基金，不用 ETF/联接。
 FORCE_INCLUDE: dict[str, tuple[str, ...]] = {
     "equity": ("014855", "014193", "020899", "020256"),
+    "bond": PURE_BOND_PIN_CODES,
     "hybrid": ("001638", "001123", "001423", "001407", "009690", "110023"),
 }
+
+# Optional display names for pinned stubs missing from Sina scale list.
+FORCE_INCLUDE_NAMES: dict[str, str] = dict(PURE_BOND_PIN_NAMES)
 
 # Drop from any category on rebuild (user removals from hybrid).
 # 003095/003096 = 中欧医疗健康 A/C（改盯易方达医疗保健行业混合 110023）。
@@ -260,7 +278,7 @@ def select_category_top(
             _append(
                 {
                     "code": code,
-                    "name": "",
+                    "name": FORCE_INCLUDE_NAMES.get(code, ""),
                     "category": category,
                     "categoryLabel": CATEGORY_LABELS[category],
                     "aumYi": None,
@@ -798,24 +816,35 @@ def load_cached_universe(path_data: dict[str, Any]) -> list[dict[str, Any]]:
         category = str(row.get("category") or "")
         if category not in QUOTA:
             continue
-        out.append(
-            {
-                "code": code,
-                "name": str(row.get("name") or ""),
-                "category": category,
-                "categoryLabel": row.get("categoryLabel") or CATEGORY_LABELS.get(category, category),
-                "aumYi": _num(row.get("aumYi")),
-                "nav": _num(row.get("nav")),
-                "navDate": row.get("navDate"),
-                "dayChangePct": _num(row.get("dayChangePct")),
-                "estimateNav": _num(row.get("estimateNav")),
-                "estimateChange": _num(row.get("estimateChange")),
-                "estimateChangePct": _num(row.get("estimateChangePct")),
-                "estimateTime": row.get("estimateTime"),
-                "estimateQuoteTime": row.get("estimateQuoteTime"),
-                "rankInCategory": row.get("rankInCategory"),
-            }
-        )
+        item: dict[str, Any] = {
+            "code": code,
+            "name": str(row.get("name") or ""),
+            "category": category,
+            "categoryLabel": row.get("categoryLabel") or CATEGORY_LABELS.get(category, category),
+            "aumYi": _num(row.get("aumYi")),
+            "nav": _num(row.get("nav")),
+            "navDate": row.get("navDate"),
+            "dayChangePct": _num(row.get("dayChangePct")),
+            "estimateNav": _num(row.get("estimateNav")),
+            "estimateChange": _num(row.get("estimateChange")),
+            "estimateChangePct": _num(row.get("estimateChangePct")),
+            "estimateTime": row.get("estimateTime"),
+            "estimateQuoteTime": row.get("estimateQuoteTime"),
+            "rankInCategory": row.get("rankInCategory"),
+        }
+        # Preserve portfolio profile so refresh without rebuild keeps industry mix.
+        for key in (
+            "assetMix",
+            "industries",
+            "industryAsOf",
+            "riskLevel",
+            "riskLabel",
+            "riskNote",
+            "profileError",
+        ):
+            if row.get(key) is not None:
+                item[key] = row[key]
+        out.append(item)
     return out
 
 
@@ -826,6 +855,8 @@ def build_funds_top30(
     fetch: FetchFn = _default_fetch,
     page_size: int = 2000,
 ) -> dict[str, Any]:
+    from .fund_portfolio_profile import enrich_portfolio_profile
+
     if rebuild or not previous or not (previous.get("rows")):
         universe = rebuild_universe(fetch=fetch, page_size=page_size)
     else:
@@ -837,7 +868,15 @@ def build_funds_top30(
             if isinstance(r, dict) and r.get("code"):
                 prev_by[str(r["code"]).zfill(6)] = r
 
-    valued = apply_fund_advice(enrich_nav(universe, fetch=fetch, previous_by_code=prev_by))
+    valued = enrich_nav(universe, fetch=fetch, previous_by_code=prev_by)
+    valued = enrich_portfolio_profile(
+        valued,
+        fetch=fetch,
+        previous_by_code=prev_by,
+        workers=6,
+        industry_top_n=8,
+    )
+    valued = apply_fund_advice(valued)
     counts = {k: 0 for k in QUOTA}
     advice_counts: dict[str, int] = {}
     for row in valued:
@@ -858,6 +897,8 @@ def build_funds_top30(
             "universe": "sina_fund_center",
             "nav": "eastmoney_pingzhong",
             "estimate": "sina_hq_fu",
+            "industry": "eastmoney_hypz",
+            "assetMix": "eastmoney_pingzhong_asset",
         },
         "rows": valued,
     }

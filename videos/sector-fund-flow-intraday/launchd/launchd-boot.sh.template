@@ -1,0 +1,32 @@
+#!/bin/bash
+# launchd 入口（放在 ~/Library/...，避开 Desktop TCC）
+# 通过 Terminal.app 执行真实流水线，以获得用户对 Desktop 的访问授权。
+set -euo pipefail
+
+APP_SUPPORT="${HOME}/Library/Application Support/etf68-sector-fund-flow"
+LOG_DIR="${HOME}/Library/Logs/etf68-sector-fund-flow"
+PROJECT_DIR="__PROJECT_DIR__"
+PIPELINE="${PROJECT_DIR}/scripts/daily_close_pipeline.sh"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BOOT_LOG="${LOG_DIR}/launchd-boot-${STAMP}.log"
+
+mkdir -p "$LOG_DIR" "$APP_SUPPORT"
+{
+  echo "boot $(date -Iseconds)"
+  echo "project=$PROJECT_DIR"
+  echo "pipeline=$PIPELINE"
+} >>"$BOOT_LOG"
+
+# 不要在这里 test Desktop 路径是否存在：launchd 对 Desktop 的 -f 也会被 TCC 拦截。
+# 直接交给 Terminal 去执行。
+
+# 用 Terminal 跑，避免 launchd 直接读 Desktop → Operation not permitted
+# 日志仍写入 Library/Logs
+osascript >>"$BOOT_LOG" 2>&1 <<EOF
+tell application "Terminal"
+  do script "export PATH='${PATH:-/usr/bin:/bin}'; export TZ=Asia/Shanghai; export VISIBILITY=public; export COLLECTION='资金流向'; export NO_PROXY='*'; cd $(printf %q "$PROJECT_DIR") && /bin/bash $(printf %q "$PIPELINE") >> $(printf %q "$LOG_DIR")/pipeline-terminal.log 2>&1; echo EXIT:\\\$?; exit"
+end tell
+EOF
+
+echo "spawned Terminal job $(date -Iseconds)" >>"$BOOT_LOG"
+exit 0

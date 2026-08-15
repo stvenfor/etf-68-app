@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ETF-68 板块资金流向：每个交易日 15:30（上海时区）自动成片并公开发布抖音。
+  安装：videos/sector-fund-flow-intraday/scripts/install_launchd.sh
+
+  注意：工程若在 ~/Desktop 下，launchd 直接执行会触发 TCC「Operation not permitted」。
+  因此 Program 指向 ~/Library/Application Support/.../launchd-boot.sh，
+  再由该脚本用 Terminal.app 拉起真实流水线。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.etf68.sector-fund-flow-daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__BOOT_SH__</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__APP_SUPPORT__</string>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <!-- 周一到周五 15:30；脚本内再过滤休市/周末调休 -->
+    <dict>
+      <key>Weekday</key><integer>1</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>2</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>3</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>4</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>5</integer>
+      <key>Hour</key><integer>15</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+    <key>TZ</key>
+    <string>Asia/Shanghai</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+    <key>VISIBILITY</key>
+    <string>public</string>
+    <key>COLLECTION</key>
+    <string>资金流向</string>
+    <key>NO_PROXY</key>
+    <string>*</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/launchd.err.log</string>
+
+  <!-- GUI 会话才能弹 Terminal / Chrome / Playwright -->
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>Nice</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>

@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("etf68", {
   speakText: (payload) => ipcRenderer.invoke("speak-text", payload || {}),
   loadFundsTop30: () => ipcRenderer.invoke("load-funds-top30"),
   refreshFundsTop30: (payload) => ipcRenderer.invoke("refresh-funds-top30", payload || {}),
+  loadFundPanorama: (payload) => ipcRenderer.invoke("load-fund-panorama", payload || {}),
   loadMyHoldings: () => ipcRenderer.invoke("load-my-holdings"),
   refreshMyHoldings: () => ipcRenderer.invoke("refresh-my-holdings"),
   refreshBoard: (payload) => ipcRenderer.invoke("refresh-board", payload || {}),
@@ -34,6 +35,10 @@ contextBridge.exposeInMainWorld("etf68", {
   runRotationBacktest: (payload) => ipcRenderer.invoke("run-rotation-backtest", payload || {}),
   loadRotationLast: () => ipcRenderer.invoke("load-rotation-last"),
   loadRotationAccountRef: () => ipcRenderer.invoke("load-rotation-account-ref"),
+  loadMacroTiming: () => ipcRenderer.invoke("load-macro-timing"),
+  refreshMacroTiming: (payload) => ipcRenderer.invoke("refresh-macro-timing", payload || {}),
+  loadMacroDispersionWindow: (payload) =>
+    ipcRenderer.invoke("load-macro-dispersion-window", payload || {}),
   onGenerateLog: (cb) => {
     const handler = (_e, line) => cb(line);
     ipcRenderer.on("generate-log", handler);

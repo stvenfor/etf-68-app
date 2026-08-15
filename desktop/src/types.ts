@@ -129,7 +129,16 @@ export type BondPureFundRow = {
   duration?: number;
   bucket?: string;
   estimate?: BondEstimate;
-  implied?: BondEggMove & { raw?: number | null };
+  implied?: BondEggMove & {
+    raw?: number | null;
+    rateBp?: number | null;
+    bucket?: string;
+  };
+  /** 净值日涨跌折算的实盘蛋 */
+  actual?: BondEggMove | null;
+  nav?: number | null;
+  navDate?: string | null;
+  navRetPct?: number | null;
 };
 
 export type BondReview = {
@@ -354,6 +363,13 @@ export type FundTop30Row = {
   advice?: string;
   adviceDetail?: string;
   adviceRisk?: string;
+  assetMix?: HoldingAssetMix | null;
+  industries?: HoldingIndustry[];
+  industryAsOf?: string | null;
+  riskLevel?: string;
+  riskLabel?: string;
+  riskNote?: string;
+  profileError?: string;
   error?: string;
 };
 
@@ -371,6 +387,40 @@ export type FundsTop30Bundle = {
   };
   rows: FundTop30Row[];
   source?: Record<string, string>;
+};
+
+export type FundPanoramaPoint = {
+  date: string;
+  close?: number | null;
+  nav?: number | null;
+  dayChangePct?: number | null;
+};
+
+export type FundPanoramaSummary = {
+  points?: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  lastNav?: number | null;
+  lastDayChangePct?: number | null;
+  ret5dPct?: number | null;
+  ret20dPct?: number | null;
+  ret60dPct?: number | null;
+  ret250dPct?: number | null;
+  maxDrawdownPct?: number | null;
+  peakDate?: string | null;
+  troughDate?: string | null;
+  peakNav?: number | null;
+  troughNav?: number | null;
+};
+
+export type FundPanoramaBundle = {
+  ok?: boolean;
+  code?: string;
+  fetchedAt?: string | null;
+  series?: FundPanoramaPoint[];
+  summary?: FundPanoramaSummary | null;
+  meta?: Record<string, string>;
+  error?: string | null;
 };
 
 export type HoldingAssetMix = {
@@ -440,6 +490,95 @@ export type MyHoldingsBundle = {
   source?: Record<string, string>;
 };
 
+export type MacroCrowdingSummary = {
+  change_1d?: number | null;
+  change_5d?: number | null;
+  label?: string;
+  mode?: string;
+  precise?: number | null;
+  precise_percentile_10y?: number | null;
+  smooth_percentile_10y?: number | null;
+  value?: number | null;
+};
+
+export type MacroIndexSeries = {
+  code: string;
+  name: string;
+  list_date?: string;
+  close: Array<number | null>;
+};
+
+export type MacroTimingSeries = {
+  as_of_date?: string;
+  batch_id?: string;
+  schema_version?: string;
+  dates: string[];
+  smooth: Array<number | null>;
+  precise: Array<number | null>;
+  indices: MacroIndexSeries[];
+};
+
+export type MacroDispersionMeta = {
+  ok?: boolean;
+  state?: string;
+  message?: string;
+  asOf?: string;
+  buildId?: string;
+  bundleId?: string;
+  calendarLen?: number;
+  hasLatest180?: boolean;
+};
+
+export type MacroTimingBundle = {
+  ok: boolean;
+  cache?: boolean;
+  fetchedAt?: string | null;
+  asOf?: string | null;
+  source?: string;
+  releaseStatus?: string;
+  schemaVersion?: string;
+  crowding?: MacroCrowdingSummary | null;
+  series?: MacroTimingSeries | null;
+  dispersion?: MacroDispersionMeta | null;
+  meta?: Record<string, unknown>;
+  error?: string;
+  fetchError?: string;
+};
+
+export type MacroDispersionIndustry = {
+  code: string;
+  name: string;
+  normalized?: number | null;
+  return90?: number | null;
+  C?: number | null;
+  O?: number | null;
+};
+
+export type MacroDispersionRow = {
+  date: string;
+  D?: number | null;
+  MA3?: number | null;
+  K?: number | null;
+  K_MA5?: number | null;
+  industries: MacroDispersionIndustry[];
+  indices?: Array<{ code: string; name: string; normalized?: number | null }>;
+};
+
+export type MacroDispersionWindow = {
+  ok: boolean;
+  state?: string;
+  message?: string;
+  asOf?: string;
+  buildId?: string;
+  endDate?: string;
+  endIndex?: number;
+  calendar?: string[];
+  windowStart?: string;
+  windowEnd?: string;
+  rows?: MacroDispersionRow[];
+  error?: string;
+};
+
 declare global {
   interface Window {
     etf68: {
@@ -486,6 +625,16 @@ declare global {
         ok: boolean;
         bundle?: FundsTop30Bundle;
         rebuilt?: boolean;
+        error?: string;
+      }>;
+      loadFundPanorama: (payload: {
+        code: string;
+        name?: string;
+        category?: string;
+        categoryLabel?: string;
+      }) => Promise<{
+        ok: boolean;
+        bundle?: FundPanoramaBundle;
         error?: string;
       }>;
       loadMyHoldings: () => Promise<{
@@ -658,6 +807,12 @@ declare global {
       }) => Promise<Record<string, unknown>>;
       loadRotationLast: () => Promise<Record<string, unknown>>;
       loadRotationAccountRef: () => Promise<Record<string, unknown>>;
+      loadMacroTiming: () => Promise<MacroTimingBundle>;
+      refreshMacroTiming: (payload?: { skipDispersion?: boolean }) => Promise<MacroTimingBundle>;
+      loadMacroDispersionWindow: (payload?: {
+        endDate?: string;
+        noFetch?: boolean;
+      }) => Promise<MacroDispersionWindow>;
       onGenerateLog: (cb: (line: string) => void) => () => void;
     };
   }

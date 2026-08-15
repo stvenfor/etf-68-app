@@ -7,12 +7,33 @@
 ```
 Task Progress:
 - [ ] 1. 拉取并校验当日 close 数据
-- [ ] 2. Root.tsx 指向当日 JSON
+- [ ] 2. 指向 latest JSON（Root 固定 import sector-fund-flow-latest.json）
 - [ ] 3. npm run render && npm run validate
 - [ ] 4. npm run cover（JPG only）并拷到桌面
 - [ ] 5. 写 video.json（含竖/横封面路径）
 - [ ] 6. publish-video.mjs 私密/公开发布（禁止 AI 封面）
 ```
+
+### 自动调度（交易日 15:30 → 成片 + 抖音公开）
+
+一键安装 macOS launchd（登录态 GUI 会话下跑 Playwright）：
+
+```bash
+cd videos/sector-fund-flow-intraday
+./scripts/install_launchd.sh install
+./scripts/install_launchd.sh status
+# 立即试跑（可加 --skip-publish / --private / --force）
+./scripts/install_launchd.sh run-now --skip-publish
+```
+
+- 触发：周一至周五 **15:30**（`Asia/Shanghai`）；脚本内跳过周末/静态休市表，并对拉数做最多 6 次重试。
+- 主脚本：`scripts/daily_close_pipeline.sh`（fetch → validate → render → cover → 抖音公开 + 合集「资金流向」）。
+- 日志：`~/Library/Logs/etf68-sector-fund-flow/`；同日成功后写 `done-YYYY-MM-DD.ok` 防重复（`--force` 可重跑）。
+- 环境变量：`VISIBILITY=public|private`、`COLLECTION=资金流向`、`ETF68_DOUYIN_PUBLISH=.../publish-video.mjs`。
+- 前置：本机已 `node auth.mjs` 登录抖音创作者中心；Chrome 可在 GUI 会话启动。
+- **Desktop TCC**：工程在 `~/Desktop/...` 时，launchd **不能直接执行**脚本（会 `Operation not permitted` / exit 126）。安装器会写入 `~/Library/Application Support/etf68-sector-fund-flow/launchd-boot.sh`，到点用 **Terminal.app** 拉起流水线。可选增强：系统设置 → 隐私与安全性 → 完全磁盘访问权限，勾选「终端」。
+
+卸载：`./scripts/install_launchd.sh uninstall`
 
 ### 1. 数据
 
@@ -29,9 +50,10 @@ python3 scripts/fetch_intraday_flow.py \
 python3 scripts/validate_data.py \
   src/data/sector-fund-flow-$(date +%F).json \
   --expect-date $(date +%F) --expect-mode close
+cp -f src/data/sector-fund-flow-$(date +%F).json src/data/sector-fund-flow-latest.json
 ```
 
-把 `src/Root.tsx` 的 import 换成当日 JSON。
+`src/Root.tsx` 固定 import `sector-fund-flow-latest.json`（勿再每日改路径）。
 
 ### 2. 渲染 + 封面（JPG）
 
