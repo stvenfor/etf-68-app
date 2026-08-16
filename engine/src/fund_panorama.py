@@ -184,8 +184,8 @@ def build_fund_panorama(
     if name and not meta_out.get("name"):
         meta_out["name"] = name
 
-    # Prefer last ~5y for UI (keep full if shorter).
-    max_points = 1300
+    # Prefer last ~6y for UI range tabs (30d…5y).
+    max_points = 1600
     if len(series) > max_points:
         series = series[-max_points:]
 

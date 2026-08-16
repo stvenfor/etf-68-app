@@ -70,29 +70,50 @@ fi
 
 DATA_JSON="src/data/sector-fund-flow-${TRADE_DATE}.json"
 LATEST_JSON="src/data/sector-fund-flow-latest.json"
+TODAY="$(date +%F)"
 
-# ---- 1. 拉数（盘后数据偶发延迟，轻量重试）----
+# ---- 1. 拉数 / 复用冻结包 ----
+# 东财盘中 fflow kline 仅当日可拉；历史日必须用已冻结 JSON。
 FETCH_OK=0
-for attempt in 1 2 3 4 5 6; do
-  echo "fetch attempt $attempt/6 ..."
-  if "$PYTHON" scripts/fetch_intraday_flow.py \
-      --trade-date "$TRADE_DATE" \
-      --snapshot-mode close \
-      --output "$DATA_JSON"; then
+if [[ "$TRADE_DATE" != "$TODAY" ]]; then
+  if [[ -f "$DATA_JSON" ]]; then
+    echo "INFO: $TRADE_DATE ≠ 今日($TODAY)，复用冻结数据 $DATA_JSON"
     if "$PYTHON" scripts/validate_data.py \
         "$DATA_JSON" \
         --expect-date "$TRADE_DATE" \
         --expect-mode close; then
       FETCH_OK=1
-      break
+    else
+      echo "ERROR: 冻结数据校验失败: $DATA_JSON" >&2
+      exit 1
     fi
+  else
+    echo "ERROR: 东财资金流向仅支持当日拉数；未找到冻结包 $DATA_JSON" >&2
+    echo "HINT: 请在交易日盘后生成，或去掉 --date 使用今日。" >&2
+    exit 1
   fi
-  echo "WARN: fetch/validate failed; sleep 90s"
-  sleep 90
-done
-if [[ "$FETCH_OK" -ne 1 ]]; then
-  echo "ERROR: 无法取得 $TRADE_DATE close 资金流向数据" >&2
-  exit 1
+else
+  for attempt in 1 2 3 4 5 6; do
+    echo "fetch attempt $attempt/6 ..."
+    if "$PYTHON" scripts/fetch_intraday_flow.py \
+        --trade-date "$TRADE_DATE" \
+        --snapshot-mode close \
+        --output "$DATA_JSON"; then
+      if "$PYTHON" scripts/validate_data.py \
+          "$DATA_JSON" \
+          --expect-date "$TRADE_DATE" \
+          --expect-mode close; then
+        FETCH_OK=1
+        break
+      fi
+    fi
+    echo "WARN: fetch/validate failed; sleep 90s"
+    sleep 90
+  done
+  if [[ "$FETCH_OK" -ne 1 ]]; then
+    echo "ERROR: 无法取得 $TRADE_DATE close 资金流向数据" >&2
+    exit 1
+  fi
 fi
 
 # 固定 latest 入口，避免日更改 Root.tsx

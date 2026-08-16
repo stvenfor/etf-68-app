@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,9 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
                 "maMacdVolDetail": r.get("maMacdVolDetail") or "—",
                 "ret20Rank": r.get("ret20_rank"),
                 "aboveMa28": bool(r.get("above_ma28")),
+                "aboveMa5": bool(r.get("above_ma5")) if "above_ma5" in r else None,
+                "aboveMa23": bool(r.get("above_ma23")) if "above_ma23" in r else None,
+                "ma5CrossMa23": bool(r.get("ma5_cross_ma23")) if "ma5_cross_ma23" in r else None,
                 "code": code,
                 "name": r.get("name"),
                 "trend": r.get("trend") or r.get("weeklyTrend"),
@@ -224,6 +228,8 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
                 "ret5": r.get("ret5_pct"),
                 "ret10": r.get("ret10_pct"),
                 "ret20": r.get("ret20_pct"),
+                "ret60": r.get("ret60_pct"),
+                "ret120": r.get("ret120_pct"),
                 "dd10": eg.get("dd10") or 0,
                 "dd20": eg.get("dd20") or 0,
                 "dd30": eg.get("dd30") or 0,
@@ -272,6 +278,44 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
             if row.get("ret30Hold") is None and row["code"] in ret_by:
                 row["ret30Hold"] = ret_by[row["code"]]
 
+    # Soft-fill return windows from panorama closes when review lacks them.
+    ret30_entry_votes: list[str] = []
+    ret_fields = (
+        ("ret1", 1),
+        ("ret5", 5),
+        ("ret10", 10),
+        ("ret20", 20),
+        ("ret30Hold", 30),
+        ("ret60", 60),
+        ("ret120", 120),
+    )
+    for row in rows_out:
+        series = row.get("panoramaSeries") or []
+        for field, window in ret_fields:
+            if row.get(field) is not None:
+                continue
+            filled = _ret_from_panorama(series, window)
+            if filled is None:
+                continue
+            row[field] = filled["ret"]
+            if field == "ret30Hold" and filled.get("entryDate"):
+                ret30_entry_votes.append(str(filled["entryDate"]))
+        ma_flags = _ma_flags_from_panorama(series)
+        if ma_flags is not None:
+            if row.get("aboveMa5") is None:
+                row["aboveMa5"] = ma_flags["aboveMa5"]
+            if row.get("aboveMa23") is None:
+                row["aboveMa23"] = ma_flags["aboveMa23"]
+            if row.get("ma5CrossMa23") is None:
+                row["ma5CrossMa23"] = ma_flags["ma5CrossMa23"]
+        else:
+            if row.get("aboveMa5") is None:
+                row["aboveMa5"] = False
+            if row.get("aboveMa23") is None:
+                row["aboveMa23"] = False
+            if row.get("ma5CrossMa23") is None:
+                row["ma5CrossMa23"] = False
+
     static_dir = Path(os.environ.get("ETF68_STATIC_DIR") or (REPO_ROOT / "data" / "static"))
     delivery = _read_json(static_dir / "equity-index-futures-delivery-calendar-2026.json")
     citic = _read_json(static_dir / "citic-monthly-daily-2026.json")
@@ -283,11 +327,15 @@ def assemble_ui_bundle(day: str) -> dict[str, Any]:
     impact_events = _soft_refresh_impact_events(impact_path, as_of=data_date)
     bond_review = _build_bond_review_soft(as_of=data_date, rows=rows_out)
 
+    ret30_entry = review.get("ret30_entry")
+    if not ret30_entry and ret30_entry_votes:
+        ret30_entry = Counter(ret30_entry_votes).most_common(1)[0][0]
+
     bundle = {
         "dataDate": data_date,
         "generatedAt": datetime.now(SHANGHAI).isoformat(),
         "breadthPct": review.get("breadth_pct"),
-        "ret30Entry": review.get("ret30_entry"),
+        "ret30Entry": ret30_entry,
         "ret30AsOf": review.get("ret30_as_of") or review.get("data_date"),
         "counts": {"byAction": by_action, "byTrend": by_trend},
         "bondReview": bond_review,
@@ -462,6 +510,80 @@ def _read_json(path: Path) -> Any | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _ma_flags_from_panorama(series: Any) -> dict[str, bool] | None:
+    """Derive MA5 / MA23 position flags from panorama closes."""
+    if not isinstance(series, list):
+        return None
+    closes: list[float] = []
+    for p in series:
+        if not isinstance(p, dict) or p.get("close") is None:
+            continue
+        try:
+            closes.append(float(p["close"]))
+        except (TypeError, ValueError):
+            continue
+    if len(closes) < 5:
+        return None
+    close = closes[-1]
+    ma5 = sum(closes[-5:]) / 5.0
+    above_ma5 = close > ma5
+    if len(closes) < 23:
+        return {"aboveMa5": above_ma5, "aboveMa23": False, "ma5CrossMa23": False}
+    ma23 = sum(closes[-23:]) / 23.0
+    above_ma23 = close > ma23
+    ma5_cross = False
+    if len(closes) >= 24:
+        ma5_prev = sum(closes[-6:-1]) / 5.0
+        ma23_prev = sum(closes[-24:-1]) / 23.0
+        ma5_cross = ma5_prev <= ma23_prev and ma5 > ma23
+    return {
+        "aboveMa5": above_ma5,
+        "aboveMa23": above_ma23,
+        "ma5CrossMa23": ma5_cross,
+    }
+
+
+def _ret_from_panorama(series: Any, window: int) -> dict[str, Any] | None:
+    """Compute N-trading-day return from panorama close series."""
+    need = window + 1
+    if not isinstance(series, list) or window <= 0:
+        return None
+    points: list[tuple[str, float]] = []
+    for p in series:
+        if not isinstance(p, dict):
+            continue
+        close = p.get("close")
+        date_s = p.get("date")
+        if close is None or date_s is None:
+            continue
+        try:
+            points.append((str(date_s)[:10], float(close)))
+        except (TypeError, ValueError):
+            continue
+    if len(points) < 2:
+        return None
+    if len(points) >= need:
+        entry_date, entry_close = points[-need]
+    else:
+        # Series shorter than requested window — use earliest available close.
+        entry_date, entry_close = points[0]
+    _, last_close = points[-1]
+    if entry_close == 0:
+        return None
+    return {
+        "ret": round((last_close / entry_close - 1.0) * 100.0, 4),
+        "entryDate": entry_date,
+    }
+
+
+def _ret30_from_panorama(series: Any) -> dict[str, Any] | None:
+    """Backward-compatible 30-day helper. """
+    filled = _ret_from_panorama(series, 30)
+    if filled is None:
+        return None
+    return {"ret30Hold": filled["ret"], "entryDate": filled["entryDate"]}
 
 
 def _soft_refresh_impact_events(path: Path, *, as_of: str) -> Any | None:
@@ -1301,6 +1423,93 @@ def cmd_generate(args: argparse.Namespace) -> int:
         return 1
 
 
+def _soft_step(step: str, fn) -> dict[str, Any]:
+    """Run a soft-fail refresh step with streamable progress events."""
+    print(json.dumps({"event": "step_start", "step": step}, ensure_ascii=False), flush=True)
+    try:
+        summary = fn()
+        if not isinstance(summary, dict):
+            summary = {"ok": True, "result": summary}
+        print(
+            json.dumps({"event": "step_done", "step": step, **summary}, ensure_ascii=False),
+            flush=True,
+        )
+        return summary
+    except Exception as exc:  # noqa: BLE001
+        err = {"ok": False, "error": str(exc)[:200]}
+        print(
+            json.dumps({"event": "step_error", "step": step, **err}, ensure_ascii=False),
+            flush=True,
+        )
+        return err
+
+
+def cmd_full_refresh(args: argparse.Namespace) -> int:
+    """全量更新：ETF 日更 + 公募/持仓/宏观/理财/看板等卫星数据一并刷新。"""
+    print(
+        json.dumps({"event": "step_start", "step": "full_refresh"}, ensure_ascii=False),
+        flush=True,
+    )
+    steps: dict[str, Any] = {}
+
+    # 1) 核心日更（内含 funds-top30 / my-holdings / finance-news）
+    gen_args = argparse.Namespace(
+        date=getattr(args, "date", None),
+        seed=getattr(args, "seed", None),
+        workers=int(getattr(args, "workers", None) or 6),
+    )
+    gen_rc = cmd_generate(gen_args)
+    steps["generate"] = {"ok": gen_rc == 0}
+
+    # 2) 宏观择时镜像
+    def _macro() -> dict[str, Any]:
+        from src.macro_onechart import default_cache_dir, refresh_bundle
+
+        return refresh_bundle(
+            cache_dir=default_cache_dir(),
+            include_dispersion=not bool(getattr(args, "skip_dispersion", False)),
+        )
+
+    steps["macro_timing"] = _soft_step("macro_timing", _macro)
+
+    # 3) 理财报价 + 指数跟踪
+    def _quotes() -> dict[str, Any]:
+        from src.finance_research import refresh_fund_quotes
+
+        return refresh_fund_quotes()
+
+    def _index() -> dict[str, Any]:
+        from src.finance_research import refresh_index_track
+
+        return refresh_index_track()
+
+    steps["finance_quotes"] = _soft_step("finance_quotes", _quotes)
+    steps["index_track"] = _soft_step("index_track", _index)
+
+    # 4) 看板 live（指数/成交 + 新闻）
+    def _board() -> dict[str, Any]:
+        return _patch_latest_market_board(live=True, with_news=True)
+
+    steps["refresh_board"] = _soft_step("refresh_board", _board)
+
+    latest = OUT_DIR / "latest.json"
+    ok = bool(steps.get("generate", {}).get("ok")) and latest.exists()
+    print(
+        json.dumps(
+            {
+                "event": "done",
+                "ok": ok,
+                "mode": "full_refresh",
+                "steps": {k: bool((v or {}).get("ok")) for k, v in steps.items()},
+                "latestPath": str(latest) if latest.exists() else None,
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+    return 0 if ok else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1310,6 +1519,20 @@ def main() -> int:
     p_gen.add_argument("--seed", default=None)
     p_gen.add_argument("--workers", type=int, default=6)
     p_gen.set_defaults(func=cmd_generate)
+
+    p_full = sub.add_parser(
+        "full-refresh",
+        help="Full refresh: generate + macro timing + finance quotes/index + live board",
+    )
+    p_full.add_argument("--date", default=None)
+    p_full.add_argument("--seed", default=None)
+    p_full.add_argument("--workers", type=int, default=6)
+    p_full.add_argument(
+        "--skip-dispersion",
+        action="store_true",
+        help="Skip macro dispersion windows when refreshing OneChart mirror",
+    )
+    p_full.set_defaults(func=cmd_full_refresh)
 
     p_load = sub.add_parser("load-latest", help="Print latest UI bundle")
     p_load.set_defaults(func=cmd_load_latest)

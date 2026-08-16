@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld("etf68", {
   checkPython: () => ipcRenderer.invoke("check-python"),
   loadLatest: () => ipcRenderer.invoke("load-latest"),
   generateDaily: (payload) => ipcRenderer.invoke("generate-daily", payload || {}),
+  fullRefresh: (payload) => ipcRenderer.invoke("full-refresh", payload || {}),
+  runSectorFundFlow: (payload) => ipcRenderer.invoke("run-sector-fund-flow", payload || {}),
   assembleLatest: (payload) => ipcRenderer.invoke("assemble-latest", payload || {}),
   speakText: (payload) => ipcRenderer.invoke("speak-text", payload || {}),
   loadFundsTop30: () => ipcRenderer.invoke("load-funds-top30"),

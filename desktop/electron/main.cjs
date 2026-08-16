@@ -414,6 +414,75 @@ function runPython(args, { onLine, timeoutMs } = {}) {
   });
 }
 
+function sectorFundFlowDir() {
+  return path.join(repoRoot(), "videos", "sector-fund-flow-intraday");
+}
+
+/** Run a shell script with streamed lines (same log channel as generate). */
+function runBash(scriptPath, args, { cwd, onLine, timeoutMs, env: extraEnv } = {}) {
+  return new Promise((resolve, reject) => {
+    const env = {
+      ...process.env,
+      NO_PROXY: "*",
+      no_proxy: "*",
+      ...(extraEnv || {}),
+    };
+    delete env.HTTP_PROXY;
+    delete env.HTTPS_PROXY;
+    delete env.http_proxy;
+    delete env.https_proxy;
+    delete env.ALL_PROXY;
+    delete env.all_proxy;
+
+    const child = spawn("/bin/bash", [scriptPath, ...(args || [])], {
+      cwd: cwd || path.dirname(scriptPath),
+      env,
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer = null;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn(value);
+    };
+    if (timeoutMs && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        try {
+          child.kill("SIGTERM");
+          setTimeout(() => {
+            try {
+              if (!child.killed) child.kill("SIGKILL");
+            } catch {
+              /* ignore */
+            }
+          }, 2000);
+        } catch {
+          /* ignore */
+        }
+        finish(reject, new Error(`bash_timeout_${timeoutMs}ms`));
+      }, timeoutMs);
+    }
+    child.stdout.on("data", (buf) => {
+      const text = buf.toString();
+      stdout += text;
+      text.split(/\r?\n/).filter(Boolean).forEach((line) => onLine && onLine(line));
+    });
+    child.stderr.on("data", (buf) => {
+      const text = buf.toString();
+      stderr += text;
+      text.split(/\r?\n/).filter(Boolean).forEach((line) => onLine && onLine(`[err] ${line}`));
+    });
+    child.on("error", (err) => finish(reject, err));
+    child.on("close", (code) => {
+      if (code === 0) finish(resolve, { stdout, stderr, code });
+      else finish(reject, new Error(stderr || stdout || `exit_${code}`));
+    });
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -490,6 +559,106 @@ ipcMain.handle("generate-daily", async (event, payload = {}) => {
       return { ok: false, error: "generate_ok_but_missing_latest", logs };
     }
     return { ok: true, bundle: JSON.parse(fs.readFileSync(latest, "utf8")), logs };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err), logs };
+  }
+});
+
+ipcMain.handle("full-refresh", async (event, payload = {}) => {
+  const day = payload.date || null;
+  const args = ["cli_app.py", "full-refresh", "--workers", String(payload.workers || 6)];
+  if (day) args.push("--date", day);
+  if (payload.skipDispersion) args.push("--skip-dispersion");
+  const logs = [];
+  try {
+    await runPython(args, {
+      timeoutMs: 900000,
+      onLine: (line) => {
+        logs.push(line);
+        event.sender.send("generate-log", line);
+      },
+    });
+    const latest = path.join(outDir(), "latest.json");
+    if (!fs.existsSync(latest)) {
+      return { ok: false, error: "full_refresh_ok_but_missing_latest", logs };
+    }
+    return { ok: true, bundle: JSON.parse(fs.readFileSync(latest, "utf8")), logs };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err), logs };
+  }
+});
+
+ipcMain.handle("run-sector-fund-flow", async (event, payload = {}) => {
+  const root = sectorFundFlowDir();
+  const script = path.join(root, "scripts", "daily_close_pipeline.sh");
+  if (!fs.existsSync(script)) {
+    return { ok: false, error: `missing_pipeline:${script}` };
+  }
+
+  const shanghaiToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  // Prefer explicit date → board date → today. Historical days reuse frozen JSON in pipeline.
+  let tradeDate = payload.date ? String(payload.date).slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tradeDate)) {
+    tradeDate = shanghaiToday;
+  }
+
+  const frozen = path.join(root, "src", "data", `sector-fund-flow-${tradeDate}.json`);
+  if (tradeDate !== shanghaiToday && !fs.existsSync(frozen)) {
+    // Fall back to latest frozen package date if board date has no freeze.
+    const latest = path.join(root, "src", "data", "sector-fund-flow-latest.json");
+    if (fs.existsSync(latest)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(latest, "utf8"));
+        const fromLatest = String(raw.tradeDate || raw.asOf || raw.date || "").slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(fromLatest)) {
+          tradeDate = fromLatest;
+        }
+      } catch {
+        /* keep tradeDate */
+      }
+    }
+  }
+
+  const args = ["--force", "--date", tradeDate];
+  if (payload.skipPublish) args.push("--skip-publish");
+  if (payload.private) args.push("--private");
+  else args.push("--public");
+
+  const logs = [];
+  const push = (line) => {
+    logs.push(line);
+    event.sender.send("generate-log", line);
+  };
+  push(`sector-fund-flow start root=${root} tradeDate=${tradeDate} today=${shanghaiToday}`);
+  try {
+    await runBash(script, args, {
+      cwd: root,
+      timeoutMs: Number(payload.timeoutMs) || 45 * 60 * 1000,
+      env: {
+        VISIBILITY: payload.private ? "private" : "public",
+        COLLECTION: payload.collection || "资金流向",
+        PYTHON: pythonBin(),
+      },
+      onLine: push,
+    });
+    const videoPath = path.join(root, "out", "sector-fund-flow.mp4");
+    return {
+      ok: true,
+      tradeDate,
+      videoPath: fs.existsSync(videoPath) ? videoPath : null,
+      desktopHint: path.join(
+        require("os").homedir(),
+        "Desktop",
+        `板块资金流向-${tradeDate}.mp4`,
+      ),
+      logs,
+    };
   } catch (err) {
     return { ok: false, error: String(err.message || err), logs };
   }

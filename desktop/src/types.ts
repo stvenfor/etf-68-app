@@ -8,6 +8,9 @@ export type EtfRow = {
   maMacdVolDetail: string;
   ret20Rank: number | null;
   aboveMa28: boolean;
+  aboveMa5: boolean;
+  aboveMa23: boolean;
+  ma5CrossMa23: boolean;
   code: string;
   name: string;
   trend: string;
@@ -16,6 +19,8 @@ export type EtfRow = {
   ret5: number | null;
   ret10: number | null;
   ret20: number | null;
+  ret60: number | null;
+  ret120: number | null;
   dd10: number;
   dd20: number;
   dd30: number;
@@ -593,6 +598,30 @@ declare global {
       generateDaily: (payload?: { date?: string; workers?: number }) => Promise<{
         ok: boolean;
         bundle?: UiBundle;
+        error?: string;
+        logs?: string[];
+      }>;
+      fullRefresh: (payload?: {
+        date?: string;
+        workers?: number;
+        skipDispersion?: boolean;
+      }) => Promise<{
+        ok: boolean;
+        bundle?: UiBundle;
+        error?: string;
+        logs?: string[];
+      }>;
+      runSectorFundFlow: (payload?: {
+        date?: string;
+        skipPublish?: boolean;
+        private?: boolean;
+        collection?: string;
+        timeoutMs?: number;
+      }) => Promise<{
+        ok: boolean;
+        tradeDate?: string;
+        videoPath?: string | null;
+        desktopHint?: string;
         error?: string;
         logs?: string[];
       }>;

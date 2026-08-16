@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ACTIONS,
+  DAILY_MA_OPTS,
   DD_OPTS,
   DEFAULT_FILTERS,
   DetailFilters,
@@ -236,10 +237,12 @@ export default function App() {
   const [tab, setTab] = useState<string>("board");
   const [filters, setFilters] = useState<DetailFilters>(DEFAULT_FILTERS);
   const [busy, setBusy] = useState(false);
+  const [busyKind, setBusyKind] = useState<"generate" | "full" | "fundflow" | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [status, setStatus] = useState("加载中…");
   const [logs, setLogs] = useState<string[]>([]);
   const [pyInfo, setPyInfo] = useState<string>("");
+  const [dataRevision, setDataRevision] = useState(0);
   const [impactSector, setImpactSector] = useState("全部");
   const [impactSide, setImpactSide] = useState("全部");
   const [citicMonth, setCiticMonth] = useState<number | "全部">("全部");
@@ -364,12 +367,15 @@ export default function App() {
 
   async function onGenerate() {
     setBusy(true);
+    setBusyKind("generate");
     setLogs([]);
     setStatus("生成中…");
     try {
       const res = await window.etf68.generateDaily({ workers: 6 });
       if (res.ok && res.bundle) {
         setBundle(res.bundle);
+        setBoardLiveAt(res.bundle.marketBoard?.fetchedAt || null);
+        setDataRevision((n) => n + 1);
         setStatus(`已生成 ${res.bundle.dataDate}`);
       } else {
         setStatus(`生成失败：${res.error || "unknown"}`);
@@ -378,6 +384,56 @@ export default function App() {
       setStatus(String(err));
     } finally {
       setBusy(false);
+      setBusyKind(null);
+    }
+  }
+
+  async function onFullRefresh() {
+    setBusy(true);
+    setBusyKind("full");
+    setLogs([]);
+    setStatus("全量更新中…");
+    try {
+      const res = await window.etf68.fullRefresh({ workers: 6 });
+      if (res.ok && res.bundle) {
+        setBundle(res.bundle);
+        setBoardLiveAt(res.bundle.marketBoard?.fetchedAt || null);
+        setDataRevision((n) => n + 1);
+        setStatus(`全量更新完成 ${res.bundle.dataDate}`);
+      } else {
+        setStatus(`全量更新失败：${res.error || "unknown"}`);
+      }
+    } catch (err) {
+      setStatus(String(err));
+    } finally {
+      setBusy(false);
+      setBusyKind(null);
+    }
+  }
+
+  async function onSectorFundFlow() {
+    setBusy(true);
+    setBusyKind("fundflow");
+    setLogs([]);
+    setStatus("资金流向：拉数 / 渲染 / 发抖音…");
+    try {
+      // 看板 dataDate 常为上一交易日；历史日走冻结包，当日才联网拉东财。
+      const date = bundle?.dataDate || undefined;
+      const res = await window.etf68.runSectorFundFlow({ date, private: false });
+      if (res.ok) {
+        setStatus(
+          `资金流向已发布${res.tradeDate ? ` ${res.tradeDate}` : ""}${
+            res.desktopHint ? ` · 桌面副本已写入` : ""
+          }`,
+        );
+      } else {
+        setStatus(`资金流向失败：${res.error || "unknown"}`);
+      }
+    } catch (err) {
+      setStatus(String(err));
+    } finally {
+      setBusy(false);
+      setBusyKind(null);
     }
   }
 
@@ -480,52 +536,103 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-left">
             <div className="brand">ETF-68</div>
-            <div className="topbar-divider" />
+            <div className="topbar-divider" aria-hidden />
             <div className="topbar-page">
-              <span className="topbar-page-title">{activeTab.label}</span>
+              <div className="topbar-page-row">
+                <span className="topbar-page-title">{activeTab.label}</span>
+                {bundle ? (
+                  <span className="status-chip is-live" title={status}>
+                    <span className="status-chip-dot live" />
+                    已加载
+                  </span>
+                ) : (
+                  <span className="status-chip warn" title={status}>
+                    <span className="status-chip-dot" />
+                    待加载
+                  </span>
+                )}
+                <span className="status-chip accent" title="技术候选">
+                  候选 {candidateCount}
+                </span>
+              </div>
               <span className="meta">
                 {bundle ? `${bundle.dataDate} · 温度 ${fmtNum(bundle.breadthPct, 1)}%` : "无数据"}
                 {pyInfo ? ` · ${pyInfo}` : ""}
               </span>
             </div>
           </div>
-          <div className="topbar-chips">
-            {bundle ? (
-              <span className="status-chip">
-                <span className="status-chip-dot live" />
-                已加载
-              </span>
-            ) : (
-              <span className="status-chip warn">
-                <span className="status-chip-dot" />
-                待加载
-              </span>
-            )}
-            <span className="status-chip accent" title="技术候选">
-              候选 {candidateCount}
-            </span>
-          </div>
           <div className="topbar-actions">
-            <button className="btn" disabled={!bundle || busy} onClick={onSpeak}>
-              {speaking ? "停止播报" : "日更播报"}
-            </button>
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() =>
-                window.etf68.assembleLatest({}).then((r) => {
-                  if (r.ok && r.bundle) {
-                    setBundle(r.bundle);
-                    setStatus(`已组装 ${r.bundle.dataDate}`);
-                  } else setStatus(r.error || "组装失败");
-                })
-              }
-            >
-              从本地报告组装
-            </button>
-            <button className="btn primary" disabled={busy} onClick={onGenerate}>
-              {busy ? "生成中…" : "生成今日"}
-            </button>
+            <div className="topbar-action-group" role="group" aria-label="日更操作">
+              <button
+                type="button"
+                className="btn"
+                disabled={!bundle || busy}
+                onClick={onSpeak}
+                title="朗读今日日更摘要"
+              >
+                {speaking ? "停止播报" : "日更播报"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                title="用本地已有报告重新组装看板"
+                onClick={() =>
+                  window.etf68.assembleLatest({}).then((r) => {
+                    if (r.ok && r.bundle) {
+                      setBundle(r.bundle);
+                      setBoardLiveAt(r.bundle.marketBoard?.fetchedAt || null);
+                      setStatus(`已组装 ${r.bundle.dataDate}`);
+                    } else setStatus(r.error || "组装失败");
+                  })
+                }
+              >
+                本地组装
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || logs.length === 0}
+                title="清空下方引擎日志"
+                onClick={() => {
+                  setLogs([]);
+                  setStatus("日志已清理");
+                }}
+              >
+                清理日志
+              </button>
+            </div>
+            <div className="topbar-action-group is-primary" role="group" aria-label="数据更新">
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={busy}
+                onClick={onFullRefresh}
+                title="ETF 日更 + 公募/持仓/宏观/理财/看板一并刷新"
+              >
+                {busyKind === "full" ? "更新中…" : "全量更新"}
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy}
+                onClick={onGenerate}
+                title="仅跑 ETF 日更流水线（含公募与持仓净值）"
+              >
+                {busyKind === "generate" ? "生成中…" : "生成今日"}
+              </button>
+            </div>
+            <div className="topbar-action-group is-publish" role="group" aria-label="短视频发布">
+              <button
+                type="button"
+                className="btn publish"
+                disabled={busy}
+                onClick={onSectorFundFlow}
+                title="生成板块资金流向竖屏视频并公开发布到抖音（合集：资金流向）"
+              >
+                {busyKind === "fundflow" ? "成片/发布中…" : "资金流向→抖音"}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -590,14 +697,28 @@ export default function App() {
 
         {(busy || logs.length > 0) && (
           <div className="logs-wrap">
+            <div className="logs-toolbar">
+              <span className="logs-toolbar-label">{busy ? "运行日志" : "最近日志"}</span>
+              <button
+                type="button"
+                className="btn logs-clear-btn"
+                disabled={busy || logs.length === 0}
+                onClick={() => {
+                  setLogs([]);
+                  setStatus("日志已清理");
+                }}
+              >
+                清理日志
+              </button>
+            </div>
             <div className="logs">{logs.slice(-30).join("\n") || "等待引擎输出…"}</div>
           </div>
         )}
 
         <main className="main">
-        {tab === "funds30" && <FundsTop30Panel />}
-        {tab === "rotation" && <EtfRotationPanel />}
-        {tab === "finance" && <FinanceResearchPanel />}
+        {tab === "funds30" && <FundsTop30Panel key={`funds30-${dataRevision}`} />}
+        {tab === "rotation" && <EtfRotationPanel key={`rotation-${dataRevision}`} />}
+        {tab === "finance" && <FinanceResearchPanel key={`finance-${dataRevision}`} />}
 
         {tab !== "funds30" && tab !== "rotation" && tab !== "finance" && !bundle && (
           <div className="empty">暂无数据。可先点「从本地报告组装」，或「生成今日」联网跑流水线。</div>
@@ -605,6 +726,7 @@ export default function App() {
 
         {bundle && tab === "board" && (
           <DashboardShell
+            key={`board-${dataRevision}`}
             bundle={bundle}
             liveAt={boardLiveAt || bundle.marketBoard?.fetchedAt || null}
             refreshing={boardRefreshing}
@@ -919,6 +1041,16 @@ export default function App() {
                   </option>
                 ))}
               </select>
+              <select
+                value={filters.dailyMa}
+                onChange={(e) => setFilter("dailyMa", e.target.value)}
+              >
+                {DAILY_MA_OPTS.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "全部" ? "日均线：全部" : `日均线：${s}`}
+                  </option>
+                ))}
+              </select>
               <select value={filters.etf} onChange={(e) => setFilter("etf", e.target.value)}>
                 <option value="全部">ETF：全部</option>
                 {filterOptions.etfs.map((e) => (
@@ -1008,9 +1140,13 @@ export default function App() {
                     <th>名称</th>
                     <th>板块</th>
                     <th>周趋势</th>
-                    <th className="num">30日%</th>
                     <th className="num">当日%</th>
                     <th className="num">5日%</th>
+                    <th className="num">10日%</th>
+                    <th className="num">20日%</th>
+                    <th className="num">30日%</th>
+                    <th className="num">60日%</th>
+                    <th className="num">120日%</th>
                     <th className="num">回撤10</th>
                     <th className="num">回撤20</th>
                     <th>最佳边</th>
@@ -1089,9 +1225,13 @@ export default function App() {
                       </td>
                       <td>{r.sector}</td>
                       <td>{r.trend}</td>
-                      <td className={pctClass(r.ret30Hold)}>{fmtPct(r.ret30Hold)}</td>
                       <td className={pctClass(r.ret1)}>{fmtPct(r.ret1)}</td>
                       <td className={pctClass(r.ret5)}>{fmtPct(r.ret5)}</td>
+                      <td className={pctClass(r.ret10)}>{fmtPct(r.ret10)}</td>
+                      <td className={pctClass(r.ret20)}>{fmtPct(r.ret20)}</td>
+                      <td className={pctClass(r.ret30Hold)}>{fmtPct(r.ret30Hold)}</td>
+                      <td className={pctClass(r.ret60)}>{fmtPct(r.ret60)}</td>
+                      <td className={pctClass(r.ret120)}>{fmtPct(r.ret120)}</td>
                       <td className="num">{fmtNum(r.dd10)}</td>
                       <td className="num">{fmtNum(r.dd20)}</td>
                       <td>{r.bestEdge}</td>

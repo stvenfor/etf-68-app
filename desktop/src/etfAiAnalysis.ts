@@ -85,7 +85,7 @@ export function buildEtfAiAnalysis(row: EtfRow, dataDate?: string): EtfAiAnalysi
 
   const performance: string[] = [
     `当日 ${fmtPct(row.ret1)}，5日 ${fmtPct(row.ret5)}，10日 ${fmtPct(row.ret10)}，20日 ${fmtPct(row.ret20)}`,
-    `30日持有收益 ${fmtPct(row.ret30Hold)}`,
+    `30日 ${fmtPct(row.ret30Hold)}，60日 ${fmtPct(row.ret60)}，120日 ${fmtPct(row.ret120)}`,
     `回撤：10日 ${fmtNum(row.dd10)}% · 20日 ${fmtNum(row.dd20)}% · 60日 ${fmtNum(row.dd60)}%`,
   ];
   if (row.sentiment != null) {

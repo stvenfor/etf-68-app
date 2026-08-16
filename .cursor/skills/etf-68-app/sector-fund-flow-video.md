@@ -28,6 +28,8 @@ cd videos/sector-fund-flow-intraday
 
 - 触发：周一至周五 **15:30**（`Asia/Shanghai`）；脚本内跳过周末/静态休市表，并对拉数做最多 6 次重试。
 - 主脚本：`scripts/daily_close_pipeline.sh`（fetch → validate → render → cover → 抖音公开 + 合集「资金流向」）。
+- **历史交易日**：东财盘中 fflow 仅当日可拉；若本地已有 `src/data/sector-fund-flow-YYYY-MM-DD.json` 则直接复用（桌面按钮用看板 `dataDate` 时走此路径）。
+- 桌面端顶栏按钮「资金流向→抖音」走同一脚本（`--force --public`），日志进应用内日志区。
 - 日志：`~/Library/Logs/etf68-sector-fund-flow/`；同日成功后写 `done-YYYY-MM-DD.ok` 防重复（`--force` 可重跑）。
 - 环境变量：`VISIBILITY=public|private`、`COLLECTION=资金流向`、`ETF68_DOUYIN_PUBLISH=.../publish-video.mjs`。
 - 前置：本机已 `node auth.mjs` 登录抖音创作者中心；Chrome 可在 GUI 会话启动。

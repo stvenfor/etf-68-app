@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactECharts from "echarts-for-react";
 import type { ECharts } from "echarts";
-import type { EtfRow } from "./types";
+import type { EtfPanoramaPoint, EtfRow } from "./types";
 import {
   calcCloseInterval,
+  calcMa5Ma23CrossStats,
+  computeMacdSeries,
   dailyCloseOption,
+  detectMa5Ma23ImminentCross,
+  detectMacdNearZeroGolden,
   fullCloseInterval,
+  macdOption,
   netFlowAmountOption,
   resolveBrushCategoryIndices,
   sharesPriceOption,
@@ -17,6 +22,32 @@ type Props = {
   row: EtfRow;
   onClose: () => void;
 };
+
+type CloseWindowKey = "5d" | "10d" | "20d" | "30d" | "60d" | "90d" | "120d" | "240d" | "360d" | "720d";
+
+const CLOSE_WINDOWS: Array<{ key: CloseWindowKey; label: string; tradingDays: number }> = [
+  { key: "5d", label: "5日", tradingDays: 5 },
+  { key: "10d", label: "10日", tradingDays: 10 },
+  { key: "20d", label: "20日", tradingDays: 20 },
+  { key: "30d", label: "30日", tradingDays: 30 },
+  { key: "60d", label: "60日", tradingDays: 60 },
+  { key: "90d", label: "90日", tradingDays: 90 },
+  { key: "120d", label: "120日", tradingDays: 120 },
+  { key: "240d", label: "240日", tradingDays: 240 },
+  { key: "360d", label: "360日", tradingDays: 360 },
+  { key: "720d", label: "720日", tradingDays: 720 },
+];
+
+function sliceCloseSeries(
+  series: EtfPanoramaPoint[],
+  key: CloseWindowKey,
+): EtfPanoramaPoint[] {
+  if (!series.length) return series;
+  const spec = CLOSE_WINDOWS.find((w) => w.key === key);
+  if (!spec) return series;
+  const n = Math.max(2, spec.tradingDays);
+  return series.length <= n ? series : series.slice(-n);
+}
 
 function fmtYi(v: number | null | undefined, digits = 2): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -99,12 +130,36 @@ function clearBrushAreas(chart: ECharts) {
 }
 
 export default function EtfPanoramaModal({ row, onClose }: Props) {
-  const series = row.panoramaSeries ?? [];
+  const fullSeries = row.panoramaSeries ?? [];
   const summary = row.panoramaSummary;
   const flowWindows = resolveFlowWindows(row);
-  const hasSeries = series.length > 0;
+  const hasSeries = fullSeries.length > 0;
   const closeChartRef = useRef<ReactECharts | null>(null);
+  const [closeWindow, setCloseWindow] = useState<CloseWindowKey>("30d");
   const [closeRange, setCloseRange] = useState<CloseRangeSelection | null>(null);
+
+  const series = useMemo(
+    () => sliceCloseSeries(fullSeries, closeWindow),
+    [fullSeries, closeWindow],
+  );
+  const windowLabel = CLOSE_WINDOWS.find((w) => w.key === closeWindow)?.label || "";
+  const maCrossStats = useMemo(
+    () => calcMa5Ma23CrossStats(fullSeries),
+    [fullSeries],
+  );
+  const imminentCross = useMemo(
+    () => detectMa5Ma23ImminentCross(fullSeries),
+    [fullSeries],
+  );
+  const macdNearZeroGolden = useMemo(() => {
+    if (!fullSeries.length) return null;
+    const macd = computeMacdSeries(fullSeries.map((p) => p.close));
+    return detectMacdNearZeroGolden(
+      macd,
+      fullSeries.map((p) => p.date),
+    );
+  }, [fullSeries]);
+  const [maTipOpen, setMaTipOpen] = useState(false);
 
   const fullInterval = useMemo(() => fullCloseInterval(series), [series]);
   const selectedInterval = useMemo(
@@ -127,11 +182,31 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
 
   useEffect(() => {
     setCloseRange(null);
+    setCloseWindow("30d");
+    setMaTipOpen(false);
   }, [row.code]);
 
+  useEffect(() => {
+    setCloseRange(null);
+  }, [closeWindow]);
+
   const dailyOption = useMemo(
-    () => dailyCloseOption(series, { range: closeRange }),
-    [series, closeRange]
+    () =>
+      dailyCloseOption(series, {
+        range: closeRange,
+        fullSeries,
+        imminentCross,
+      }),
+    [series, closeRange, fullSeries, imminentCross]
+  );
+
+  const macdChartOption = useMemo(
+    () =>
+      macdOption(series, {
+        fullSeries,
+        nearZeroGolden: macdNearZeroGolden,
+      }),
+    [series, fullSeries, macdNearZeroGolden],
   );
 
   useEffect(() => {
@@ -192,7 +267,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
               {row.code} {row.name}
             </h2>
             <p className="panorama-sub">
-              {row.sector} · 日线走势 / 净申赎·成交额 / 份额趋势
+              {row.sector} · 日线走势 / MACD / 净申赎·成交额 / 份额趋势
             </p>
           </div>
           <button type="button" className="btn" onClick={onClose}>
@@ -206,7 +281,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
           </div>
         ) : (
           <>
-            <div className="panorama-cards">
+            <div className="panorama-cards panorama-cards-4">
               <div className="panorama-card">
                 <div className="panorama-card-label">日均净申赎（亿元）</div>
                 <div
@@ -251,6 +326,176 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
                 </div>
                 <div className="panorama-card-note">按日净申赎样本滚动合计</div>
               </div>
+              <div
+                className={`panorama-card panorama-ma-cross-card${
+                  maCrossStats?.inGoldenHold ? " is-active" : ""
+                }`}
+              >
+                <div className="panorama-card-label panorama-ma-cross-label">
+                  <span className="panorama-ma-cross-icon" aria-hidden>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                      <path
+                        d="M3 16 L9 10 L13 14 L21 5"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M3 8 L9 14 L13 10 L21 19"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity="0.72"
+                      />
+                    </svg>
+                  </span>
+                  MA5↑ / MA23↓ 胜率
+                  <button
+                    type="button"
+                    className={`panorama-ma-tip-btn${maTipOpen ? " active" : ""}`}
+                    aria-expanded={maTipOpen}
+                    aria-controls="panorama-ma-cross-tip"
+                    title="查看胜率说明"
+                    onClick={() => setMaTipOpen((v) => !v)}
+                  >
+                    ?
+                  </button>
+                </div>
+                <div
+                  className={`panorama-card-value ${
+                    maCrossStats?.winRatePct == null
+                      ? ""
+                      : maCrossStats.winRatePct >= 50
+                        ? "up"
+                        : "down"
+                  }`}
+                >
+                  {maCrossStats?.winRatePct == null
+                    ? "—"
+                    : `${maCrossStats.winRatePct.toFixed(0)}%`}
+                </div>
+                <div className="panorama-card-note">
+                  {maCrossStats
+                    ? `${maCrossStats.wins}胜 / ${maCrossStats.trades}次完整周期` +
+                      (maCrossStats.avgReturnPct != null
+                        ? ` · 均收益 ${fmtPct(maCrossStats.avgReturnPct)}`
+                        : "") +
+                      (maCrossStats.avgHoldDays != null
+                        ? ` · 均持 ${maCrossStats.avgHoldDays.toFixed(0)}日`
+                        : "")
+                    : "序列不足，无法统计"}
+                </div>
+                {maCrossStats?.open && (
+                  <div
+                    className={`panorama-ma-open ${
+                      maCrossStats.open.returnPct >= 0 ? "up" : "down"
+                    }`}
+                  >
+                    持仓中 · 自 {maCrossStats.open.entryDate} · 浮盈亏{" "}
+                    {fmtPct(maCrossStats.open.returnPct)}
+                  </div>
+                )}
+                {maTipOpen && maCrossStats && (
+                  <div
+                    id="panorama-ma-cross-tip"
+                    className="panorama-ma-tip"
+                    role="note"
+                  >
+                    <div className="panorama-ma-tip-title">规则与提示</div>
+                    <p>
+                      统计口径：<b>MA5 上穿 MA23（金叉）买入</b>，持有至
+                      <b>MA5 下穿 MA23（死叉 / 23 日线重新占优）</b>
+                      卖出；胜率为完整周期收益 &gt; 0 的占比。另统计每次金叉后固定持有
+                      <b>3 日 / 5 日</b>
+                      的涨跌幅（金叉日收盘 → 第 N 个交易日收盘）。基于当前全景收盘序列，不含费用与滑点。
+                    </p>
+                    <p>{maCrossStats.tip}</p>
+                    {(maCrossStats.fwd3.samples > 0 || maCrossStats.fwd5.samples > 0) && (
+                      <div className="panorama-ma-fwd-summary">
+                        {maCrossStats.fwd3.samples > 0 && (
+                          <div
+                            className={`panorama-ma-fwd-summary-row ${
+                              (maCrossStats.fwd3.avgReturnPct ?? 0) >= 0 ? "up" : "down"
+                            }`}
+                          >
+                            <span>金叉后3日</span>
+                            <span>
+                              均 {fmtPct(maCrossStats.fwd3.avgReturnPct)} · 胜率{" "}
+                              {maCrossStats.fwd3.winRatePct == null
+                                ? "—"
+                                : `${maCrossStats.fwd3.winRatePct.toFixed(0)}%`}
+                              · {maCrossStats.fwd3.wins}胜 / {maCrossStats.fwd3.samples}次
+                            </span>
+                          </div>
+                        )}
+                        {maCrossStats.fwd5.samples > 0 && (
+                          <div
+                            className={`panorama-ma-fwd-summary-row ${
+                              (maCrossStats.fwd5.avgReturnPct ?? 0) >= 0 ? "up" : "down"
+                            }`}
+                          >
+                            <span>金叉后5日</span>
+                            <span>
+                              均 {fmtPct(maCrossStats.fwd5.avgReturnPct)} · 胜率{" "}
+                              {maCrossStats.fwd5.winRatePct == null
+                                ? "—"
+                                : `${maCrossStats.fwd5.winRatePct.toFixed(0)}%`}
+                              · {maCrossStats.fwd5.wins}胜 / {maCrossStats.fwd5.samples}次
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {maCrossStats.fwd3.recent.length > 0 && (
+                      <>
+                        <div className="panorama-ma-tip-title">近期金叉后3日</div>
+                        <ul className="panorama-ma-tip-trades">
+                          {maCrossStats.fwd3.recent.map((t) => (
+                            <li key={`fwd3-${t.entryDate}-${t.exitDate}`}>
+                              {t.entryDate} → {t.exitDate} ·{" "}
+                              <span className={t.returnPct >= 0 ? "up" : "down"}>
+                                {fmtPct(t.returnPct)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {maCrossStats.fwd5.recent.length > 0 && (
+                      <>
+                        <div className="panorama-ma-tip-title">近期金叉后5日</div>
+                        <ul className="panorama-ma-tip-trades">
+                          {maCrossStats.fwd5.recent.map((t) => (
+                            <li key={`fwd5-${t.entryDate}-${t.exitDate}`}>
+                              {t.entryDate} → {t.exitDate} ·{" "}
+                              <span className={t.returnPct >= 0 ? "up" : "down"}>
+                                {fmtPct(t.returnPct)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {maCrossStats.recentTrades.length > 0 && (
+                      <>
+                        <div className="panorama-ma-tip-title">近期完整周期</div>
+                        <ul className="panorama-ma-tip-trades">
+                          {maCrossStats.recentTrades.map((t) => (
+                            <li key={`${t.entryDate}-${t.exitDate}`}>
+                              {t.entryDate} → {t.exitDate} · {t.holdDays}日 ·{" "}
+                              <span className={t.returnPct >= 0 ? "up" : "down"}>
+                                {fmtPct(t.returnPct)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <section className="panorama-chart-block">
@@ -258,8 +503,37 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
                 <div>
                   <h3>日线走势（收盘价）</h3>
                   <p className="panorama-chart-hint">
-                    横向拖拽框选区间查看涨跌幅、最大回撤与修复状态
+                    叠加 MA5 / MA23；切换区间后可横向拖拽框选，查看涨跌幅、最大回撤与修复状态
                   </p>
+                  {imminentCross && (
+                    <div
+                      className={`panorama-imminent-cross ${
+                        imminentCross.kind === "即将上穿" ? "up" : "down"
+                      }`}
+                      role="status"
+                    >
+                      <span className="panorama-imminent-cross-tag">
+                        {imminentCross.kind}
+                      </span>
+                      <span className="panorama-imminent-cross-text">
+                        {imminentCross.tip}
+                      </span>
+                    </div>
+                  )}
+                  <div className="fund-panorama-range-tabs" role="tablist" aria-label="日线区间">
+                    {CLOSE_WINDOWS.map((w) => (
+                      <button
+                        key={w.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={closeWindow === w.key}
+                        className={`fund-panorama-range-tab${closeWindow === w.key ? " active" : ""}`}
+                        onClick={() => setCloseWindow(w.key)}
+                      >
+                        {w.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {activeInterval && (
                   <div
@@ -269,7 +543,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
                   >
                     <div className="panorama-range-badge-meta">
                       <span className="panorama-range-badge-label">
-                        {isCustomRange ? "已选区间" : "全区间"}
+                        {isCustomRange ? "已选区间" : windowLabel || "当前区间"}
                       </span>
                       <span className="panorama-range-badge-dates">
                         {activeInterval.startDate} → {activeInterval.endDate}
@@ -330,7 +604,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
                         className="panorama-range-reset"
                         onClick={resetCloseRange}
                       >
-                        重置全区间
+                        重置当前区间
                       </button>
                     )}
                   </div>
@@ -349,7 +623,37 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
             </section>
 
             <section className="panorama-chart-block">
-              <h3>净申赎 / 成交额（亿元）</h3>
+              <h3>MACD 走势 · {windowLabel}</h3>
+              <p className="panorama-chart-hint" style={{ margin: "4px 8px 8px" }}>
+                DIF / DEA / 柱（12,26,9）；始终标注最近一次零轴附近金叉（上/下均算），必要时自动向前扩展
+              </p>
+              {macdNearZeroGolden?.latest && (
+                <div
+                  className="panorama-imminent-cross up"
+                  role="status"
+                  style={{ margin: "0 8px 10px" }}
+                >
+                  <span className="panorama-imminent-cross-tag">
+                    {macdNearZeroGolden.kind === "零轴附近即将金叉"
+                      ? macdNearZeroGolden.kind
+                      : `最近零轴金叉·${macdNearZeroGolden.latest.side}`}
+                  </span>
+                  <span className="panorama-imminent-cross-text">
+                    {macdNearZeroGolden.tip}
+                  </span>
+                </div>
+              )}
+              <ReactECharts
+                option={macdChartOption}
+                style={{ height: 220 }}
+                opts={{ renderer: "canvas" }}
+                notMerge
+                lazyUpdate
+              />
+            </section>
+
+            <section className="panorama-chart-block">
+              <h3>净申赎 / 成交额（亿元） · {windowLabel}</h3>
               <ReactECharts
                 option={netFlowAmountOption(series)}
                 style={{ height: 260 }}
@@ -360,7 +664,7 @@ export default function EtfPanoramaModal({ row, onClose }: Props) {
             </section>
 
             <section className="panorama-chart-block">
-              <h3>份额 vs 价格（跟随上方时间范围）</h3>
+              <h3>份额 vs 价格（跟随上方时间范围 · {windowLabel}）</h3>
               <ReactECharts
                 option={sharesPriceOption(series)}
                 style={{ height: 240 }}

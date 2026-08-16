@@ -97,6 +97,12 @@ class ReportGeneratorTests(unittest.TestCase):
         self.assertIn("MA20", row["technical_reason"])
         self.assertIn("份额净流入", row["sentiment_reason"])
         self.assertIn(row["mom20Ma28"], {"买入", "持有", "换仓", "—"})
+        self.assertIn("above_ma5", row)
+        self.assertIn("above_ma23", row)
+        self.assertIn("ma5_cross_ma23", row)
+        self.assertIsInstance(row["above_ma5"], bool)
+        self.assertIsInstance(row["above_ma23"], bool)
+        self.assertIsInstance(row["ma5_cross_ma23"], bool)
         self.assertIn(
             row["wmDailySignal"],
             {"做多信号", "等日线", "日线过热", "方向未齐", "不做多"},

@@ -31,18 +31,32 @@ export const MA_MACD_VOL = [
   "方向未齐",
   "暂缓",
 ] as const;
+export const DAILY_MA_OPTS = [
+  "全部",
+  "5日线上",
+  "23日线上",
+  "5日线上穿23日线",
+] as const;
 export const TRENDS = ["全部", "多头", "震荡", "空头"] as const;
 export const SIGN_OPTS = ["全部", "正", "负", "持平/--"] as const;
 export const DD_OPTS = ["全部", "浅(<3%)", "中(3-8%)", "深(8-15%)", "极深(≥15%)"] as const;
 export const RSI_OPTS = ["全部", "超卖(<30)", "偏低(30-45)", "中性(45-55)", "偏高(55-70)", "超买(≥70)"] as const;
 
 export const SORTS = [
-  { value: "ret30_desc", label: "排序：30日至今↓" },
-  { value: "ret30_asc", label: "排序：30日至今↑" },
   { value: "ret1_desc", label: "排序：当日↓" },
   { value: "ret1_asc", label: "排序：当日↑" },
   { value: "ret5_desc", label: "排序：5日↓" },
   { value: "ret5_asc", label: "排序：5日↑" },
+  { value: "ret10_desc", label: "排序：10日↓" },
+  { value: "ret10_asc", label: "排序：10日↑" },
+  { value: "ret20_desc", label: "排序：20日↓" },
+  { value: "ret20_asc", label: "排序：20日↑" },
+  { value: "ret30_desc", label: "排序：30日↓" },
+  { value: "ret30_asc", label: "排序：30日↑" },
+  { value: "ret60_desc", label: "排序：60日↓" },
+  { value: "ret60_asc", label: "排序：60日↑" },
+  { value: "ret120_desc", label: "排序：120日↓" },
+  { value: "ret120_asc", label: "排序：120日↑" },
   { value: "dd10_desc", label: "排序：回撤10↓" },
   { value: "dd10_asc", label: "排序：回撤10↑" },
   { value: "rsi_desc", label: "排序：RSI↓" },
@@ -61,6 +75,7 @@ export type DetailFilters = {
   mom20Ma28: string;
   wmDailySignal: string;
   maMacdVol: string;
+  dailyMa: string;
   etf: string;
   sector: string;
   trend: string;
@@ -85,6 +100,7 @@ export const DEFAULT_FILTERS: DetailFilters = {
   mom20Ma28: "全部",
   wmDailySignal: "全部",
   maMacdVol: "全部",
+  dailyMa: "全部",
   etf: "全部",
   sector: "全部",
   trend: "全部",
@@ -201,6 +217,9 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
     if (f.mom20Ma28 !== "全部" && (r.mom20Ma28 || "—") !== f.mom20Ma28) return false;
     if (f.wmDailySignal !== "全部" && (r.wmDailySignal || "—") !== f.wmDailySignal) return false;
     if (f.maMacdVol !== "全部" && (r.maMacdVol || "—") !== f.maMacdVol) return false;
+    if (f.dailyMa === "5日线上" && !r.aboveMa5) return false;
+    if (f.dailyMa === "23日线上" && !r.aboveMa23) return false;
+    if (f.dailyMa === "5日线上穿23日线" && !r.ma5CrossMa23) return false;
     if (f.etf !== "全部" && r.code !== f.etf) return false;
     if (f.sector !== "全部" && r.sector !== f.sector) return false;
     if (f.trend !== "全部" && r.trend !== f.trend) return false;
@@ -227,9 +246,13 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
   out = [...out].sort((a, b) => {
     if (key === "report") return a.reportIndex - b.reportIndex;
     const map: Record<string, number | null | undefined> = {
-      ret30: a.ret30Hold,
       ret1: a.ret1,
       ret5: a.ret5,
+      ret10: a.ret10,
+      ret20: a.ret20,
+      ret30: a.ret30Hold,
+      ret60: a.ret60,
+      ret120: a.ret120,
       dd10: a.dd10,
       rsi: a.rsi,
       sentiment: a.sentiment,
@@ -237,9 +260,13 @@ export function filterRows(rows: EtfRow[], f: DetailFilters): EtfRow[] {
       flow5: a.flow5,
     };
     const mapB: Record<string, number | null | undefined> = {
-      ret30: b.ret30Hold,
       ret1: b.ret1,
       ret5: b.ret5,
+      ret10: b.ret10,
+      ret20: b.ret20,
+      ret30: b.ret30Hold,
+      ret60: b.ret60,
+      ret120: b.ret120,
       dd10: b.dd10,
       rsi: b.rsi,
       sentiment: b.sentiment,

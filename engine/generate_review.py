@@ -156,7 +156,7 @@ def collect_shares(
     errors: dict[str, str] = {}
     sse_codes = {code for code in codes if code.startswith("5")}
     szse_codes = set(codes) - sse_codes
-    # ~120 trading days for ETF panorama charts; flow1/5/10 still use recent windows.
+    # Share history needed for near-term flow charts; price panorama may keep longer bars.
     all_dates = sorted(
         {
             bar.date

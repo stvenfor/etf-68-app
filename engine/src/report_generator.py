@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime
 from statistics import fmean
@@ -69,17 +70,31 @@ def build_report(
         if len(bars) < 60:
             raise ValueError(f"insufficient_report_bars:{code}")
         close = bars[-1].close
+        ma5 = fmean(bar.close for bar in bars[-5:]) if len(bars) >= 5 else None
         ma20 = fmean(bar.close for bar in bars[-20:])
+        ma23 = fmean(bar.close for bar in bars[-23:]) if len(bars) >= 23 else None
         ma28 = fmean(bar.close for bar in bars[-28:]) if len(bars) >= 28 else None
         ma60 = fmean(bar.close for bar in bars[-60:])
         prior_ma20 = fmean(bar.close for bar in bars[-25:-5])
         ma20_rising = ma20 > prior_ma20
         prior_ma60 = fmean(bar.close for bar in bars[-65:-5]) if len(bars) >= 65 else None
         ma60_rising = ma60 > prior_ma60 if prior_ma60 is not None else None
+        above_ma5 = bool(ma5 is not None and close > ma5)
+        above_ma23 = bool(ma23 is not None and close > ma23)
+        # 5日线上穿23日线：昨 MA5≤MA23，今 MA5>MA23
+        ma5_cross_ma23 = False
+        if len(bars) >= 24 and ma5 is not None and ma23 is not None:
+            ma5_prev = fmean(bar.close for bar in bars[-6:-1])
+            ma23_prev = fmean(bar.close for bar in bars[-24:-1])
+            ma5_cross_ma23 = ma5_prev <= ma23_prev and ma5 > ma23
         ret1 = _return_pct(bars, 1)
         ret5 = _return_pct(bars, 5)
         ret10 = _return_pct(bars, 10)
         ret20 = _return_pct(bars, 20)
+        ret30 = _return_pct(bars, 30) if len(bars) >= 31 else None
+        ret60 = _return_pct(bars, 60) if len(bars) >= 61 else None
+        ret120 = _return_pct(bars, 120) if len(bars) >= 121 else None
+        ret30_entry = bars[-31].date.isoformat() if len(bars) >= 31 else None
         rsi14 = _rsi14(bars)
         kdj = calculate_kdj(bars)
         macd = calculate_macd(bars)
@@ -148,15 +163,24 @@ def build_report(
             {
                 "date": bars[-1].date.isoformat(),
                 "close": close,
+                "ma5": ma5,
                 "ma20": ma20,
+                "ma23": ma23,
                 "ma28": ma28,
                 "ma60": ma60,
                 "ma20_rising": ma20_rising,
                 "ma60_rising": ma60_rising,
+                "above_ma5": above_ma5,
+                "above_ma23": above_ma23,
+                "ma5_cross_ma23": ma5_cross_ma23,
                 "ret1_pct": ret1,
                 "ret5_pct": ret5,
                 "ret10_pct": ret10,
                 "ret20_pct": ret20,
+                "ret30_hold_pct": None if ret30 is None else round(ret30, 4),
+                "ret30_entry": ret30_entry,
+                "ret60_pct": None if ret60 is None else round(ret60, 4),
+                "ret120_pct": None if ret120 is None else round(ret120, 4),
                 "rsi14": rsi14,
                 "distance_ma20_pct": distance_ma20,
                 "volume_ratio": volume_ratio,
@@ -220,10 +244,17 @@ def build_report(
         )
     )
     data_dates = {row["date"] for row in output_rows}
+    entry_counts = Counter(
+        str(row.get("ret30_entry")) for row in output_rows if row.get("ret30_entry")
+    )
+    ret30_entry = entry_counts.most_common(1)[0][0] if entry_counts else None
     return {
         "title": f"{max(data_dates)} ETF精简代表池技术面审阅",
         "generated_at": generated_at.isoformat(),
         "data_date": max(data_dates),
+        "ret30_entry": ret30_entry,
+        "ret30_as_of": max(data_dates),
+        "lookback_trading_days": 30,
         "flow_definition": "交易所基金份额变化 × 当日收盘价",
         "flow_price_basis": "close",
         "flow_sources": {
@@ -357,7 +388,7 @@ def build_panorama(
     *,
     bars: Sequence[DailyBar],
     points: Sequence[SharePoint],
-    lookback: int = 120,
+    lookback: int = 720,
 ) -> dict[str, Any]:
     """Align bars + shares into UI panorama series (亿元 / 亿份) and summary cards."""
     if not bars:

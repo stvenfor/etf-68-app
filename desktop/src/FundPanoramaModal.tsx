@@ -11,12 +11,61 @@ import {
 } from "./dashboard/etfPanoramaOptions";
 import { fundDayChangeOption } from "./fundPanoramaOptions";
 import { fmtNum, fmtPct } from "./filters";
-import type { FundPanoramaBundle, FundTop30Row, HoldingAssetMix } from "./types";
+import type { EtfPanoramaPoint, FundPanoramaBundle, FundTop30Row, HoldingAssetMix } from "./types";
 
 type Props = {
   row: FundTop30Row;
   onClose: () => void;
 };
+
+type NavWindowKey = "30d" | "60d" | "120d" | "240d" | "360d" | "2y" | "3y" | "5y";
+
+const NAV_WINDOWS: Array<{
+  key: NavWindowKey;
+  label: string;
+  /** Keep last N trading points when set. */
+  tradingDays?: number;
+  /** Calendar years back from last point when set. */
+  years?: number;
+}> = [
+  { key: "30d", label: "30日", tradingDays: 30 },
+  { key: "60d", label: "60日", tradingDays: 60 },
+  { key: "120d", label: "120日", tradingDays: 120 },
+  { key: "240d", label: "240日", tradingDays: 240 },
+  { key: "360d", label: "360日", tradingDays: 360 },
+  { key: "2y", label: "近两年", years: 2 },
+  { key: "3y", label: "近三年", years: 3 },
+  { key: "5y", label: "近5年", years: 5 },
+];
+
+function shiftIsoYears(isoDate: string, years: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return isoDate;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCFullYear(dt.getUTCFullYear() - years);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function sliceNavSeries(series: EtfPanoramaPoint[], key: NavWindowKey): EtfPanoramaPoint[] {
+  if (!series.length) return series;
+  const spec = NAV_WINDOWS.find((w) => w.key === key);
+  if (!spec) return series;
+  if (spec.tradingDays != null) {
+    const n = Math.max(2, spec.tradingDays);
+    return series.length <= n ? series : series.slice(-n);
+  }
+  if (spec.years != null) {
+    const end = series[series.length - 1]?.date;
+    if (!end) return series;
+    const start = shiftIsoYears(end, spec.years);
+    const filtered = series.filter((p) => p.date >= start);
+    return filtered.length >= 2 ? filtered : series.slice(-Math.min(series.length, 2));
+  }
+  return series;
+}
 
 function fmtDrawdownPct(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "—";
@@ -72,6 +121,7 @@ function tonePct(v: number | null | undefined): string {
 export default function FundPanoramaModal({ row, onClose }: Props) {
   const [bundle, setBundle] = useState<FundPanoramaBundle | null>(null);
   const [status, setStatus] = useState("加载净值序列…");
+  const [navWindow, setNavWindow] = useState<NavWindowKey>("120d");
   const closeChartRef = useRef<ReactECharts | null>(null);
   const [closeRange, setCloseRange] = useState<CloseRangeSelection | null>(null);
 
@@ -87,6 +137,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
     let cancelled = false;
     setBundle(null);
     setCloseRange(null);
+    setNavWindow("120d");
     setStatus("加载净值序列…");
     void window.etf68
       .loadFundPanorama({
@@ -112,7 +163,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
     };
   }, [row.code, row.name, row.category, row.categoryLabel]);
 
-  const series = useMemo(() => {
+  const fullSeries = useMemo(() => {
     const raw = bundle?.series || [];
     return raw.map((p) => ({
       date: p.date,
@@ -124,8 +175,15 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
     }));
   }, [bundle]);
 
-  const hasSeries = series.length > 0;
+  const series = useMemo(() => sliceNavSeries(fullSeries, navWindow), [fullSeries, navWindow]);
+
+  useEffect(() => {
+    setCloseRange(null);
+  }, [navWindow]);
+
+  const hasSeries = fullSeries.length > 0;
   const summary = bundle?.summary;
+  const windowLabel = NAV_WINDOWS.find((w) => w.key === navWindow)?.label || "";
 
   const fullInterval = useMemo(() => fullCloseInterval(series), [series]);
   const selectedInterval = useMemo(
@@ -146,7 +204,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
           date: p.date,
           close: p.close,
           nav: p.close,
-          dayChangePct: p.dayChangePct,
+          dayChangePct: (p as { dayChangePct?: number | null }).dayChangePct ?? null,
         })),
       ),
     [series],
@@ -298,7 +356,23 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
               <div className="panorama-chart-head">
                 <div>
                   <h3>单位净值走势</h3>
-                  <p className="panorama-chart-hint">横向拖拽框选区间查看涨跌幅、最大回撤与修复状态</p>
+                  <p className="panorama-chart-hint">
+                    切换区间后可横向拖拽框选，查看涨跌幅、最大回撤与修复状态
+                  </p>
+                  <div className="fund-panorama-range-tabs" role="tablist" aria-label="净值区间">
+                    {NAV_WINDOWS.map((w) => (
+                      <button
+                        key={w.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={navWindow === w.key}
+                        className={`fund-panorama-range-tab${navWindow === w.key ? " active" : ""}`}
+                        onClick={() => setNavWindow(w.key)}
+                      >
+                        {w.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {activeInterval && (
                   <div
@@ -306,7 +380,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
                   >
                     <div className="panorama-range-badge-meta">
                       <span className="panorama-range-badge-label">
-                        {isCustomRange ? "已选区间" : "全区间"}
+                        {isCustomRange ? "已选区间" : windowLabel || "当前区间"}
                       </span>
                       <span className="panorama-range-badge-dates">
                         {activeInterval.startDate} → {activeInterval.endDate}
@@ -336,7 +410,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
                     </div>
                     {isCustomRange && (
                       <button type="button" className="panorama-range-reset" onClick={resetCloseRange}>
-                        重置全区间
+                        重置当前区间
                       </button>
                     )}
                   </div>
@@ -355,7 +429,7 @@ export default function FundPanoramaModal({ row, onClose }: Props) {
             </section>
 
             <section className="panorama-chart-block">
-              <h3>日涨跌幅（%）</h3>
+              <h3>日涨跌幅（%） · {windowLabel}</h3>
               <ReactECharts
                 option={dayChgOption}
                 style={{ height: 220 }}
