@@ -218,6 +218,36 @@ def fetch_index_quotes(*, fetch: FetchFn | None = None) -> list[dict[str, Any]]:
     return _parse_tencent_indices(raw)
 
 
+INDEX_PCT_KEYS: dict[str, str] = {
+    "sh": "shPct",
+    "sz": "szPct",
+    "cyb": "cybPct",
+    "kcb": "kcbPct",
+}
+
+
+def fetch_index_pct_by_date(
+    *,
+    fetch: FetchFn | None = None,
+    days: int = 220,
+) -> dict[str, dict[str, float]]:
+    """Daily close-to-close % for the four board indices: {date: {shPct, szPct, …}}."""
+    fetch = fetch or _default_fetch
+    out: dict[str, dict[str, float]] = {}
+    for spec in INDEX_SPECS:
+        key = INDEX_PCT_KEYS[spec["id"]]
+        closes = _fqkline_close_map(spec["tencent"], fetch=fetch, days=days)
+        dates = sorted(closes)
+        for i in range(1, len(dates)):
+            prev = closes[dates[i - 1]]
+            cur = closes[dates[i]]
+            if prev in (None, 0) or cur is None:
+                continue
+            pct = round((cur / prev - 1.0) * 100.0, 2)
+            out.setdefault(dates[i], {})[key] = 0.0 if pct == 0 else pct
+    return out
+
+
 def _fqkline_close_map(symbol: str, *, fetch: FetchFn, days: int = 12) -> dict[str, float]:
     """Return {date: close} from Tencent newfqkline (field[2] is close)."""
     url = (

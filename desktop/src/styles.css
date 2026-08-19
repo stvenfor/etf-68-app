@@ -1789,6 +1789,40 @@ body:has(.app.is-board),
   margin-top: 4px;
 }
 
+.board-citic-chart {
+  min-width: 0;
+}
+
+.board-range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.board-range-tab {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-2, #f4f7fb) 70%, transparent);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.board-range-tab:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent, #1f7aaf) 40%, var(--border));
+}
+
+.board-range-tab.active {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent, #1f7aaf) 88%, #1a222d);
+  border-color: transparent;
+}
+
 .board-empty {
   height: 280px;
   display: grid;

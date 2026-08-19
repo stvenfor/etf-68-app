@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import ReactECharts from "echarts-for-react";
 import type {
   BondEggMove,
@@ -15,7 +15,9 @@ import {
   bondDeltaBpOption,
   bondPureFundBarsOption,
   bondYieldCurveOption,
+  CITIC_WINDOWS,
   citicLineOption,
+  type CiticWindowKey,
   deliveryBarOption,
   moversBarOption,
   sectorHeatOption,
@@ -46,7 +48,6 @@ export default function DashboardBoard({ bundle, liveAt, refreshing, onRefresh }
       sector: sectorHeatOption(bundle.rows),
       movers: moversBarOption(bundle.rows),
       treemap: sectorTreemapOption(bundle.rows),
-      citic: citicLineOption(bundle),
       delivery: deliveryBarOption(bundle),
     }),
     [bundle]
@@ -145,11 +146,7 @@ export default function DashboardBoard({ bundle, liveAt, refreshing, onRefresh }
 
       <div className="board-grid board-row-2">
         <ChartCard title="多空净增仓（手）" subtitle="中信 · 其它机构 · 总体合计 · 虚线为四大指数涨跌%">
-          {opts.citic ? (
-            <ReactECharts option={opts.citic} style={{ height: 320 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
-          ) : (
-            <div className="board-empty">暂无中信月度数据</div>
-          )}
+          <CiticNetChart bundle={bundle} />
         </ChartCard>
         <ChartCard title="交割日中信净增仓" subtitle="中信分品种净增仓（手）">
           {opts.delivery ? (
@@ -476,6 +473,36 @@ function eggToneClass(move?: { tone?: string; side?: string } | null): string {
   if (tone === "up") return "up";
   if (tone === "dn") return "dn";
   return "flat";
+}
+
+function CiticNetChart({ bundle }: { bundle: UiBundle }) {
+  const [windowKey, setWindowKey] = useState<CiticWindowKey>("30d");
+  const spec = CITIC_WINDOWS.find((w) => w.key === windowKey) || CITIC_WINDOWS[2];
+  const option = useMemo(() => citicLineOption(bundle, spec.days), [bundle, spec.days]);
+
+  return (
+    <div className="board-citic-chart">
+      <div className="board-range-tabs" role="tablist" aria-label="多空净增仓区间">
+        {CITIC_WINDOWS.map((w) => (
+          <button
+            key={w.key}
+            type="button"
+            role="tab"
+            aria-selected={windowKey === w.key}
+            className={`board-range-tab${windowKey === w.key ? " active" : ""}`}
+            onClick={() => setWindowKey(w.key)}
+          >
+            {w.label}
+          </button>
+        ))}
+      </div>
+      {option ? (
+        <ReactECharts option={option} style={{ height: 300 }} opts={{ renderer: "canvas" }} notMerge lazyUpdate />
+      ) : (
+        <div className="board-empty">暂无中信月度数据</div>
+      )}
+    </div>
+  );
 }
 
 function ChartCard({

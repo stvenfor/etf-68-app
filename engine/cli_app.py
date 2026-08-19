@@ -357,14 +357,76 @@ def _sync_citic_monthly(
     as_of: str,
     static_dir: Path,
 ) -> dict[str, Any] | None:
-    """Merge local cffex-daily exports into citicMonthly and persist when changed."""
-    from src.citic_sync import default_cffex_dirs, merge_cffex_into_citic_monthly
+    """Backfill missing recent days from CFFEX, merge into citicMonthly, persist."""
+    from src.citic_sync import (
+        default_cffex_dirs,
+        ensure_recent_cffex_exports,
+        merge_cffex_into_citic_monthly,
+    )
+
+    cffex_dirs = default_cffex_dirs(REPO_ROOT)
+    try:
+        backfill = ensure_recent_cffex_exports(
+            citic,
+            as_of=as_of,
+            repo_root=REPO_ROOT,
+            cffex_dirs=cffex_dirs,
+        )
+        if backfill.get("fetched") or backfill.get("failed") or backfill.get("reused"):
+            print(
+                json.dumps(
+                    {"event": "citic_backfill", **backfill},
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+    except Exception as exc:  # noqa: BLE001 — never block assemble/generate
+        print(
+            json.dumps(
+                {"event": "citic_backfill", "ok": False, "error": str(exc)[:160]},
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+
+    index_pct_by_date: dict[str, Any] | None = None
+    try:
+        from src.market_snapshot import fetch_index_pct_by_date
+
+        index_pct_by_date = fetch_index_pct_by_date(days=220)
+        filled = sum(
+            1
+            for month in (citic or {}).get("months") or []
+            for day in month.get("days") or []
+            if day.get("date") in (index_pct_by_date or {})
+        )
+        print(
+            json.dumps(
+                {
+                    "event": "citic_index_pct",
+                    "ok": True,
+                    "days": len(index_pct_by_date or {}),
+                    "overlap": filled,
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            json.dumps(
+                {"event": "citic_index_pct", "ok": False, "error": str(exc)[:160]},
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
 
     merged = merge_cffex_into_citic_monthly(
         citic,
-        cffex_dirs=default_cffex_dirs(REPO_ROOT),
+        cffex_dirs=cffex_dirs,
         market_board=market_board,
         as_of=as_of,
+        index_pct_by_date=index_pct_by_date,
     )
     if not isinstance(merged, dict):
         return citic

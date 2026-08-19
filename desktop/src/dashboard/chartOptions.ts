@@ -314,9 +314,29 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`;
 }
 
-export function citicLineOption(bundle: UiBundle): EChartsOption | null {
+export const CITIC_WINDOWS: Array<{ key: CiticWindowKey; label: string; days: number | null }> = [
+  { key: "5d", label: "近5日", days: 5 },
+  { key: "15d", label: "近15日", days: 15 },
+  { key: "30d", label: "近30日", days: 30 },
+  { key: "60d", label: "近60日", days: 60 },
+  { key: "120d", label: "近120日", days: 120 },
+  { key: "all", label: "全部", days: null },
+];
+
+export type CiticWindowKey = "5d" | "15d" | "30d" | "60d" | "120d" | "all";
+
+export function sliceCiticDays<T>(days: T[], windowDays: number | null | undefined): T[] {
+  if (!windowDays || windowDays <= 0 || days.length <= windowDays) return days;
+  return days.slice(-windowDays);
+}
+
+export function citicLineOption(
+  bundle: UiBundle,
+  windowDays: number | null = null
+): EChartsOption | null {
   const months = bundle.citicMonthly?.months || [];
-  const days = months.flatMap((m) => m.days || []).filter((d) => d.citicTotal != null);
+  const allDays = months.flatMap((m) => m.days || []).filter((d) => d.citicTotal != null);
+  const days = sliceCiticDays(allDays, windowDays);
   if (!days.length) return null;
 
   const cats = days.map((d) => d.date.slice(5));
